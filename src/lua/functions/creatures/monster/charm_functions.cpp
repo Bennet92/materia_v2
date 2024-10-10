@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "game/game.hpp"
 #include "io/iobestiary.hpp"
 #include "lua/functions/creatures/monster/charm_functions.hpp"
@@ -18,7 +16,7 @@ int CharmFunctions::luaCharmCreate(lua_State* L) {
 	if (isNumber(L, 2)) {
 		charmRune_t charmid = getNumber<charmRune_t>(L, 2);
 		const auto charmList = g_game().getCharmList();
-		for (const auto charm : charmList) {
+		for (const auto &charm : charmList) {
 			if (charm->id == charmid) {
 				pushUserdata<Charm>(L, charm);
 				setMetatable(L, -1, "Charm");

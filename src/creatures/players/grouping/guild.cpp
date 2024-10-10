@@ -7,14 +7,12 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/players/grouping/guild.hpp"
 #include "game/game.hpp"
 
 void Guild::addMember(const std::shared_ptr<Player> &player) {
 	membersOnline.push_back(player);
-	for (auto member : getMembersOnline()) {
+	for (const auto &member : getMembersOnline()) {
 		g_game().updatePlayerHelpers(member);
 	}
 }

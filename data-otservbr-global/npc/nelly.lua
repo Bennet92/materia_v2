@@ -94,6 +94,20 @@ local itemsTable = {
 		{ itemName = "letter", clientId = 3505, buy = 8 },
 		{ itemName = "parcel", clientId = 3503, buy = 15 },
 	},
+	["exercise weapons"] = {
+		{ itemName = "durable exercise rod", clientId = 35283, buy = 945000, count = 1800 },
+		{ itemName = "durable exercise wand", clientId = 35284, buy = 945000, count = 1800 },
+		{ itemName = "exercise rod", clientId = 28556, buy = 262500, count = 500 },
+		{ itemName = "exercise wand", clientId = 28557, buy = 262500, count = 500 },
+		{ itemName = "lasting exercise rod", clientId = 35289, buy = 7560000, count = 14400 },
+		{ itemName = "lasting exercise wand", clientId = 35290, buy = 7560000, count = 14400 },
+	},
+	["others"] = {
+		{ itemName = "spellwand", clientId = 651, sell = 299 },
+	},
+	["shields"] = {
+		{ itemName = "spellbook", clientId = 3059, buy = 150 },
+	},
 }
 
 npcConfig.shop = {}
@@ -138,15 +152,11 @@ local function creatureSayCallback(npc, creature, type, message)
 		return false
 	end
 
-	local formattedCategoryNames = {}
-	for categoryName, _ in pairs(itemsTable) do
-		table.insert(formattedCategoryNames, "{" .. categoryName .. "}")
-	end
-
 	local categoryTable = itemsTable[message:lower()]
 
 	if categoryTable then
-		npcHandler:say("Of course, just browse through my wares.", npc, player)
+		local remainingCategories = npc:getRemainingShopCategories(message:lower(), itemsTable)
+		npcHandler:say("Of course, just browse through my wares. You can also look at " .. remainingCategories .. ".", npc, player)
 		npc:openShopWindowTable(player, categoryTable)
 	end
 	return true
@@ -156,7 +166,7 @@ npcHandler:setCallback(CALLBACK_MESSAGE_DEFAULT, creatureSayCallback)
 npcHandler:setMessage(MESSAGE_GREET, "Hello |PLAYERNAME|, What can I do for you? I'm working for the post office, but I also trade with important {potions}, {runes} and other magical equipment.")
 npcHandler:setMessage(MESSAGE_FAREWELL, "Good bye, |PLAYERNAME|.")
 npcHandler:setMessage(MESSAGE_WALKAWAY, "Ah, the impetuosity of youth.")
-npcHandler:setMessage(MESSAGE_SENDTRADE, "Of course, just browse through my wares. Or do you want to look only at {post stuff}, {potions}, {wands} or {runes}?")
+npcHandler:setMessage(MESSAGE_SENDTRADE, "Of course, just browse through my wares. Or do you want to look only at " .. GetFormattedShopCategoryNames(itemsTable) .. ".")
 npcHandler:addModule(FocusModule:new(), npcConfig.name, true, true, true)
 
 -- On buy npc shop message

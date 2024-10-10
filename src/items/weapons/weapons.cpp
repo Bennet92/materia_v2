@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/combat/combat.hpp"
 #include "game/game.hpp"
 #include "lua/creature/events.hpp"
@@ -224,7 +222,6 @@ void Weapon::internalUseWeapon(std::shared_ptr<Player> player, std::shared_ptr<I
 
 		damage.primary.type = params.combatType;
 		damage.primary.value = (getWeaponDamage(player, target, item) * damageModifier) / 100;
-		g_logger().debug("[1] Weapon::internalUseWeapon - primary damage: {}", damage.primary.value);
 		damage.secondary.type = getElementType();
 
 		// Cleave damage
@@ -246,8 +243,9 @@ void Weapon::internalUseWeapon(std::shared_ptr<Player> player, std::shared_ptr<I
 			damage.secondary.value = (getElementDamage(player, target, item) * damageModifier / 100) * damagePercent / 100;
 		}
 
-		if (g_configManager().getBoolean(TOGGLE_CHAIN_SYSTEM, __FUNCTION__) && params.chainCallback) {
+		if (g_configManager().getBoolean(TOGGLE_CHAIN_SYSTEM) && params.chainCallback) {
 			m_combat->doCombatChain(player, target, params.aggressive);
+			g_logger().debug("Weapon::internalUseWeapon - Chain callback executed.");
 		} else {
 			Combat::doCombatHealth(player, target, damage, params);
 		}
@@ -286,7 +284,7 @@ void Weapon::onUsedWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> 
 		player->addManaSpent(manaCost);
 		player->changeMana(-static_cast<int32_t>(manaCost));
 
-		if (g_configManager().getBoolean(REFUND_BEGINNING_WEAPON_MANA, __FUNCTION__) && (item->getName() == "wand of vortex" || item->getName() == "snakebite rod")) {
+		if (g_configManager().getBoolean(REFUND_BEGINNING_WEAPON_MANA) && (item->getName() == "wand of vortex" || item->getName() == "snakebite rod")) {
 			player->changeMana(static_cast<int32_t>(manaCost));
 		}
 	}
@@ -300,7 +298,7 @@ void Weapon::onUsedWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> 
 		player->changeSoul(-static_cast<int32_t>(soul));
 	}
 
-	bool skipRemoveBeginningWeaponAmmo = !g_configManager().getBoolean(REMOVE_BEGINNING_WEAPON_AMMO, __FUNCTION__) && (item->getName() == "arrow" || item->getName() == "bolt" || item->getName() == "spear");
+	bool skipRemoveBeginningWeaponAmmo = !g_configManager().getBoolean(REMOVE_BEGINNING_WEAPON_AMMO) && (item->getName() == "arrow" || item->getName() == "bolt" || item->getName() == "spear");
 	if (!skipRemoveBeginningWeaponAmmo && breakChance != 0 && uniform_random(1, 100) <= breakChance) {
 		Weapon::decrementItemCount(item);
 		player->updateSupplyTracker(item);
@@ -309,14 +307,14 @@ void Weapon::onUsedWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> 
 
 	switch (action) {
 		case WEAPONACTION_REMOVECOUNT:
-			if (!skipRemoveBeginningWeaponAmmo && g_configManager().getBoolean(REMOVE_WEAPON_AMMO, __FUNCTION__)) {
+			if (!skipRemoveBeginningWeaponAmmo && g_configManager().getBoolean(REMOVE_WEAPON_AMMO)) {
 				Weapon::decrementItemCount(item);
 				player->updateSupplyTracker(item);
 			}
 			break;
 
 		case WEAPONACTION_REMOVECHARGE: {
-			if (uint16_t charges = item->getCharges() != 0 && g_configManager().getBoolean(REMOVE_WEAPON_CHARGES, __FUNCTION__)) {
+			if (uint16_t charges = item->getCharges() != 0 && g_configManager().getBoolean(REMOVE_WEAPON_CHARGES)) {
 				g_game().transformItem(item, item->getID(), charges - 1);
 			}
 			break;
@@ -360,8 +358,8 @@ bool Weapon::executeUseWeapon(std::shared_ptr<Player> player, const LuaVariant &
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		std::string playerName = player ? player->getName() : "Player nullptr";
 		g_logger().error("[Weapon::executeUseWeapon - Player {} weaponId {}]"
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 playerName, getID());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 playerName, getID());
 		return false;
 	}
 
@@ -882,23 +880,32 @@ void WeaponWand::configureWeapon(const ItemType &it) {
 }
 
 int32_t WeaponWand::getWeaponDamage(std::shared_ptr<Player> player, std::shared_ptr<Creature>, std::shared_ptr<Item>, bool maxDamage /* = false*/) const {
-	if (!g_configManager().getBoolean(TOGGLE_CHAIN_SYSTEM, __FUNCTION__)) {
+	if (!g_configManager().getBoolean(TOGGLE_CHAIN_SYSTEM)) {
 		// Returns maximum damage or a random value between minChange and maxChange
 		return maxDamage ? -maxChange : -normal_random(minChange, maxChange);
 	}
 
 	// If chain system is enabled, calculates magic-based damage
-	int32_t attackSkill;
-	int32_t attackValue;
-	float attackFactor;
-	[[maybe_unused]] int16_t elementAttack;
+	int32_t attackSkill = 0;
+	int32_t attackValue = 0;
+	float attackFactor = 0.0;
+	[[maybe_unused]] int16_t elementAttack = 0;
 	[[maybe_unused]] CombatDamage combatDamage;
 	calculateSkillFormula(player, attackSkill, attackValue, attackFactor, elementAttack, combatDamage);
 
 	auto magLevel = player->getMagicLevel();
 	auto level = player->getLevel();
-	double min = (level / 5.0) + (magLevel + attackValue) / 3.0;
-	double max = (level / 5.0) + (magLevel + attackValue);
+
+	// Check if level is greater than zero before performing division
+	auto levelDivision = level > 0 ? level / 5.0 : 0.0;
+
+	auto totalAttackValue = magLevel + attackValue;
+
+	// Check if magLevel is greater than zero before performing division
+	auto magicLevelDivision = totalAttackValue > 0 ? totalAttackValue / 3.0 : 0.0;
+
+	double min = levelDivision + magicLevelDivision;
+	double max = levelDivision + totalAttackValue;
 
 	// Returns the calculated maximum damage or a random value between the calculated minimum and maximum
 	return maxDamage ? -max : -normal_random(min, max);

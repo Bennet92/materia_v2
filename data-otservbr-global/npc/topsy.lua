@@ -78,6 +78,20 @@ local itemsTable = {
 		{ itemName = "wand of dragonbreath", clientId = 3075, buy = 1000 },
 		{ itemName = "wand of vortex", clientId = 3074, buy = 500 },
 	},
+	["exercise weapons"] = {
+		{ itemName = "durable exercise rod", clientId = 35283, buy = 945000, count = 1800 },
+		{ itemName = "durable exercise wand", clientId = 35284, buy = 945000, count = 1800 },
+		{ itemName = "exercise rod", clientId = 28556, buy = 262500, count = 500 },
+		{ itemName = "exercise wand", clientId = 28557, buy = 262500, count = 500 },
+		{ itemName = "lasting exercise rod", clientId = 35289, buy = 7560000, count = 14400 },
+		{ itemName = "lasting exercise wand", clientId = 35290, buy = 7560000, count = 14400 },
+	},
+	["others"] = {
+		{ itemName = "spellwand", clientId = 651, sell = 299 },
+	},
+	["shields"] = {
+		{ itemName = "spellbook", clientId = 3059, buy = 150 },
+	},
 }
 
 npcConfig.shop = {}
@@ -127,11 +141,6 @@ local function creatureSayCallback(npc, creature, type, message)
 		return false
 	end
 
-	local formattedCategoryNames = {}
-	for categoryName, _ in pairs(itemsTable) do
-		table.insert(formattedCategoryNames, "{" .. categoryName .. "}")
-	end
-
 	local categoryTable = itemsTable[message:lower()]
 	local itemId = items[player:getVocation():getBaseId()]
 	if MsgContains(message, "first rod") or MsgContains(message, "first wand") then
@@ -156,7 +165,8 @@ local function creatureSayCallback(npc, creature, type, message)
 		npcHandler:say("Ok then.", npc, creature)
 		npcHandler:setTopic(playerId, 0)
 	elseif categoryTable then
-		npcHandler:say("Of course, just browse through my wares.", npc, player)
+		local remainingCategories = npc:getRemainingShopCategories(message:lower(), itemsTable)
+		npcHandler:say("Of course, just browse through my wares. You can also look at " .. remainingCategories .. ".", npc, player)
 		npc:openShopWindowTable(player, categoryTable)
 	end
 	return true
@@ -168,11 +178,7 @@ npcHandler:setMessage(
 	"Hello, dear |PLAYERNAME|. How can I help you? \z
 	If you need magical equipment such as {runes} or {wands}, just ask me for a {trade}."
 )
-npcHandler:setMessage(
-	MESSAGE_SENDTRADE,
-	"Of course, just browse through my wares. \z
-	Or do you want to look only at {potions}, {wands} or {runes}?"
-)
+npcHandler:setMessage(MESSAGE_SENDTRADE, "Of course, just browse through my wares. Or do you want to look only at " .. GetFormattedShopCategoryNames(itemsTable) .. ".")
 npcHandler:setMessage(MESSAGE_FAREWELL, "Good bye, |PLAYERNAME|. Do come again!")
 npcHandler:setMessage(MESSAGE_WALKAWAY, "Good bye, |PLAYERNAME|. Do come again!")
 npcHandler:addModule(FocusModule:new(), npcConfig.name, true, true, true)

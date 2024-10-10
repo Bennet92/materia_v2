@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "io/functions/iologindata_save_player.hpp"
 #include "game/game.hpp"
 
@@ -91,7 +89,7 @@ bool IOLoginDataSave::saveItems(std::shared_ptr<Player> player, const ItemBlockL
 		}
 
 		// Loop through items in container
-		for (std::shared_ptr<Item> item : container->getItemList()) {
+		for (auto &item : container->getItemList()) {
 			if (!item) {
 				continue; // Check for null item
 			}
@@ -99,7 +97,7 @@ bool IOLoginDataSave::saveItems(std::shared_ptr<Player> player, const ItemBlockL
 			++runningId;
 
 			// Update sub-container attributes if necessary
-			std::shared_ptr<Container> subContainer = item->getContainer();
+			const auto &subContainer = item->getContainer();
 			if (subContainer) {
 				queue.emplace_back(subContainer, runningId);
 				if (subContainer->getAttribute<int64_t>(ItemAttribute_t::OPENCONTAINER) > 0) {
@@ -123,6 +121,7 @@ bool IOLoginDataSave::saveItems(std::shared_ptr<Player> player, const ItemBlockL
 			try {
 				propWriteStream.clear();
 				item->serializeAttr(propWriteStream);
+				item->stopDecaying();
 			} catch (...) {
 				g_logger().error("Error serializing item attributes in container.");
 				return false;
@@ -292,8 +291,8 @@ bool IOLoginDataSave::savePlayerFirst(std::shared_ptr<Player> player) {
 	query << "`skill_mana_leech_amount_tries` = " << player->skills[SKILL_MANA_LEECH_AMOUNT].tries << ",";
 	query << "`manashield` = " << player->getManaShield() << ",";
 	query << "`max_manashield` = " << player->getMaxManaShield() << ",";
-	query << "`xpboost_value` = " << player->getStoreXpBoost() << ",";
-	query << "`xpboost_stamina` = " << player->getExpBoostStamina() << ",";
+	query << "`xpboost_value` = " << player->getXpBoostPercent() << ",";
+	query << "`xpboost_stamina` = " << player->getXpBoostTime() << ",";
 	query << "`quickloot_fallback` = " << (player->quickLootFallbackToMainContainer ? 1 : 0) << ",";
 
 	if (!player->isOffline()) {
@@ -436,7 +435,7 @@ bool IOLoginDataSave::savePlayerBestiarySystem(std::shared_ptr<Player> player) {
 	query << "`UnlockedRunesBit` = " << player->UnlockedRunesBit << ",";
 
 	PropWriteStream propBestiaryStream;
-	for (const auto trackedType : player->getCyclopediaMonsterTrackerSet(false)) {
+	for (const auto &trackedType : player->getCyclopediaMonsterTrackerSet(false)) {
 		propBestiaryStream.write<uint16_t>(trackedType->info.raceid);
 	}
 	size_t trackerSize;
@@ -587,7 +586,7 @@ bool IOLoginDataSave::savePlayerPreyClass(std::shared_ptr<Player> player) {
 	}
 
 	Database &db = Database::getInstance();
-	if (g_configManager().getBoolean(PREY_ENABLED, __FUNCTION__)) {
+	if (g_configManager().getBoolean(PREY_ENABLED)) {
 		std::ostringstream query;
 		for (uint8_t slotId = PreySlot_First; slotId <= PreySlot_Last; slotId++) {
 			if (const auto &slot = player->getPreySlotById(static_cast<PreySlot_t>(slotId))) {
@@ -641,7 +640,7 @@ bool IOLoginDataSave::savePlayerTaskHuntingClass(std::shared_ptr<Player> player)
 	}
 
 	Database &db = Database::getInstance();
-	if (g_configManager().getBoolean(TASK_HUNTING_ENABLED, __FUNCTION__)) {
+	if (g_configManager().getBoolean(TASK_HUNTING_ENABLED)) {
 		std::ostringstream query;
 		for (uint8_t slotId = PreySlot_First; slotId <= PreySlot_Last; slotId++) {
 			if (const auto &slot = player->getTaskHuntingSlotById(static_cast<PreySlot_t>(slotId))) {
@@ -737,7 +736,7 @@ bool IOLoginDataSave::savePlayerBosstiary(std::shared_ptr<Player> player) {
 
 	// Bosstiary tracker
 	PropWriteStream stream;
-	for (const auto monsterType : player->getCyclopediaMonsterTrackerSet(true)) {
+	for (const auto &monsterType : player->getCyclopediaMonsterTrackerSet(true)) {
 		if (!monsterType) {
 			continue;
 		}

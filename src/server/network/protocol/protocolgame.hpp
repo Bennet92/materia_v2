@@ -13,9 +13,13 @@
 #include "creatures/interactions/chat.hpp"
 #include "creatures/creature.hpp"
 #include "enums/forge_conversion.hpp"
+#include "creatures/players/cyclopedia/player_badge.hpp"
+#include "creatures/players/cyclopedia/player_cyclopedia.hpp"
+#include "creatures/players/cyclopedia/player_title.hpp"
 
 class NetworkMessage;
 class Player;
+class VIPGroup;
 class Game;
 class House;
 class Container;
@@ -29,6 +33,8 @@ class TaskHuntingOption;
 
 struct ModalWindow;
 struct Achievement;
+struct Badge;
+struct Title;
 
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 
@@ -40,10 +46,10 @@ struct TextMessage {
 	MessageClasses type = MESSAGE_STATUS;
 	std::string text;
 	Position position;
-	uint16_t channelId;
+	uint16_t channelId {};
 	struct
 	{
-		int32_t value = 0;
+		int32_t value {};
 		TextColor_t color = TEXTCOLOR_NONE;
 	} primary, secondary;
 };
@@ -73,12 +79,6 @@ public:
 	}
 
 private:
-	// Helpers so we don't need to bind every time
-	template <typename Callable, typename... Args>
-	void addGameTask(Callable function, Args &&... args);
-	template <typename Callable, typename... Args>
-	void addGameTaskTimed(uint32_t delay, std::string_view context, Callable function, Args &&... args);
-
 	ProtocolGame_ptr getThis() {
 		return std::static_pointer_cast<ProtocolGame>(shared_from_this());
 	}
@@ -96,7 +96,7 @@ private:
 
 	// we have all the parse methods
 	void parsePacket(NetworkMessage &msg) override;
-	void parsePacketFromDispatcher(NetworkMessage msg, uint8_t recvbyte);
+	void parsePacketFromDispatcher(NetworkMessage &msg, uint8_t recvbyte);
 	void onRecvFirstMessage(NetworkMessage &msg) override;
 	void onConnect() override;
 
@@ -132,6 +132,8 @@ private:
 	void sendItemInspection(uint16_t itemId, uint8_t itemCount, std::shared_ptr<Item> item, bool cyclopedia);
 	void parseInspectionObject(NetworkMessage &msg);
 
+	void parseFriendSystemAction(NetworkMessage &msg);
+
 	void parseCyclopediaCharacterInfo(NetworkMessage &msg);
 
 	void parseHighscores(NetworkMessage &msg);
@@ -141,7 +143,7 @@ private:
 
 	void parseGreet(NetworkMessage &msg);
 	void parseBugReport(NetworkMessage &msg);
-	void parseDebugAssert(NetworkMessage &msg);
+	void parseOfferDescription(NetworkMessage &msg);
 	void parsePreyAction(NetworkMessage &msg);
 	void parseSendResourceBalance();
 	void parseRuleViolationReport(NetworkMessage &msg);
@@ -213,6 +215,7 @@ private:
 	void parseAddVip(NetworkMessage &msg);
 	void parseRemoveVip(NetworkMessage &msg);
 	void parseEditVip(NetworkMessage &msg);
+	void parseVipGroupActions(NetworkMessage &msg);
 
 	void parseRotateItem(NetworkMessage &msg);
 	void parseConfigureShowOffSocket(NetworkMessage &msg);
@@ -239,7 +242,8 @@ private:
 	void sendExperienceTracker(int64_t rawExp, int64_t finalExp);
 	void sendToChannel(std::shared_ptr<Creature> creature, SpeakClasses type, const std::string &text, uint16_t channelId);
 	void sendPrivateMessage(std::shared_ptr<Player> speaker, SpeakClasses type, const std::string &text);
-	void sendIcons(uint32_t icons);
+	void sendIcons(const std::unordered_set<PlayerIcon> &iconSet, const IconBakragore iconBakragore);
+	void sendIconBakragore(const IconBakragore icon);
 	void sendFYIBox(const std::string &message);
 
 	void openImbuementWindow(std::shared_ptr<Item> item);
@@ -319,7 +323,7 @@ private:
 	void sendCyclopediaCharacterRecentDeaths(uint16_t page, uint16_t pages, const std::vector<RecentDeathEntry> &entries);
 	void sendCyclopediaCharacterRecentPvPKills(uint16_t page, uint16_t pages, const std::vector<RecentPvPKillEntry> &entries);
 	void sendCyclopediaCharacterAchievements(uint16_t secretsUnlocked, std::vector<std::pair<Achievement, uint32_t>> achievementsUnlocked);
-	void sendCyclopediaCharacterItemSummary();
+	void sendCyclopediaCharacterItemSummary(const ItemsTierCountList &inventoryItems, const ItemsTierCountList &storeInboxItems, const StashItemList &supplyStashItems, const ItemsTierCountList &depotBoxItems, const ItemsTierCountList &inboxItems);
 	void sendCyclopediaCharacterOutfitsMounts();
 	void sendCyclopediaCharacterStoreSummary();
 	void sendCyclopediaCharacterInspection();
@@ -360,6 +364,7 @@ private:
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
 	void sendVIP(uint32_t guid, const std::string &name, const std::string &description, uint32_t icon, bool notify, VipStatus_t status);
+	void sendVIPGroups();
 
 	void sendPendingStateEntered();
 	void sendEnterWorld();
@@ -390,6 +395,7 @@ private:
 	void sendAddTileItem(const Position &pos, uint32_t stackpos, std::shared_ptr<Item> item);
 	void sendUpdateTileItem(const Position &pos, uint32_t stackpos, std::shared_ptr<Item> item);
 	void sendRemoveTileThing(const Position &pos, uint32_t stackpos);
+	void sendUpdateTileCreature(const Position &pos, uint32_t stackpos, const std::shared_ptr<Creature> creature);
 	void sendUpdateTile(std::shared_ptr<Tile> tile, const Position &pos);
 
 	void sendAddCreature(std::shared_ptr<Creature> creature, const Position &pos, int32_t stackpos, bool isLogin);
@@ -477,6 +483,7 @@ private:
 
 	friend class Player;
 	friend class PlayerWheel;
+	friend class PlayerVIP;
 
 	std::unordered_set<uint32_t> knownCreatureSet;
 	std::shared_ptr<Player> player = nullptr;
@@ -497,6 +504,7 @@ private:
 	bool oldProtocol = false;
 
 	uint16_t otclientV8 = 0;
+	bool isOTC = false;
 
 	void sendInventory();
 	void sendOpenStash();
@@ -509,6 +517,8 @@ private:
 	void sendSingleSoundEffect(const Position &pos, SoundEffect_t id, SourceEffect_t source);
 	void sendDoubleSoundEffect(const Position &pos, SoundEffect_t mainSoundId, SourceEffect_t mainSource, SoundEffect_t secondarySoundId, SourceEffect_t secondarySource);
 
+	void sendHotkeyPreset();
+	void sendTakeScreenshot(Screenshot_t screenshotType);
 	void sendDisableLoginMusic();
 
 	uint8_t m_playerDeathTime = 0;

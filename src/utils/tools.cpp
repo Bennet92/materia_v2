@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "core.hpp"
 #include "items/item.hpp"
 #include "utils/tools.hpp"
@@ -1515,7 +1513,10 @@ void UPDATE_OTSYS_TIME() {
 	OTSYSTIME = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-int64_t OTSYS_TIME() {
+int64_t OTSYS_TIME(bool useTime) {
+	if (useTime) {
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	}
 	return OTSYSTIME;
 }
 
@@ -1554,6 +1555,21 @@ void capitalizeWords(std::string &source) {
 			source[i] = (char)toupper(source[i]);
 		} else if (source[i - 1] == ' ' || source[i - 1] == '\'') {
 			source[i] = (char)toupper(source[i]);
+		}
+	}
+}
+
+void capitalizeWordsIgnoringString(std::string &source, const std::string stringToIgnore) {
+	toLowerCaseString(source);
+	auto size = static_cast<uint8_t>(source.size());
+	auto indexFound = source.find(stringToIgnore);
+
+	for (uint8_t i = 0; i < size; i++) {
+		if (indexFound != std::string::npos && indexFound > 0 && std::cmp_greater(i, static_cast<uint8_t>(indexFound - 1)) && i < (indexFound + stringToIgnore.size())) {
+			continue;
+		}
+		if (i == 0 || source[i - 1] == ' ' || source[i - 1] == '\'') {
+			source[i] = static_cast<char>(std::toupper(source[i]));
 		}
 	}
 }
@@ -1817,6 +1833,31 @@ std::string getVerbForPronoun(PlayerPronoun_t pronoun, bool pastTense) {
 		return pastTense ? "were" : "are";
 	}
 	return pastTense ? "was" : "is";
+}
+
+std::string formatWithArticle(const std::string &value, bool withSpace) {
+	if (value.empty()) {
+		return "";
+	}
+
+	auto removeArticle = [](const std::string &str) -> std::string {
+		const std::string articles[] = { "a ", "an " };
+		for (const auto &article : articles) {
+			if (str.size() > article.size() && std::equal(article.begin(), article.end(), str.begin(), [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+				return str.substr(article.size());
+			}
+		}
+		return str;
+	};
+
+	std::string modifiedValue = removeArticle(value);
+	if (modifiedValue.empty()) {
+		return "";
+	}
+
+	const char &character = std::tolower(modifiedValue.front());
+	auto article = character == 'a' || character == 'e' || character == 'i' || character == 'o' || character == 'u' ? "an" : "a";
+	return fmt::format("{}{} {}.", withSpace ? " " : "", article, modifiedValue);
 }
 
 std::vector<std::string> split(const std::string &str, char delimiter /* = ','*/) {

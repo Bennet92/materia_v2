@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "items/bed.hpp"
 #include "game/game.hpp"
 #include "io/iologindata.hpp"
@@ -94,12 +92,7 @@ bool BedItem::canUse(std::shared_ptr<Player> player) {
 		return false;
 	}
 
-	auto partName = itemType.name;
-	auto nextPartname = nextBedItem->getName();
-	auto firstPart = keepFirstWordOnly(partName);
-	auto nextPartOf = keepFirstWordOnly(nextPartname);
-	g_logger().debug("First bed part name {}, second part name {}", firstPart, nextPartOf);
-	if (!isMovable() || !nextBedItem->isMovable() || firstPart != nextPartOf) {
+	if (!isMovable() || !nextBedItem->isMovable() || !isBedComplete(nextBedItem)) {
 		return false;
 	}
 
@@ -120,6 +113,23 @@ bool BedItem::canUse(std::shared_ptr<Player> player) {
 		return false;
 	}
 	return true;
+}
+
+bool BedItem::isBedComplete(std::shared_ptr<BedItem> nextBedItem) {
+	const ItemType &it = Item::items[id];
+
+	if (nextBedItem == nullptr) {
+		return false;
+	}
+
+	auto partName = it.name;
+	auto nextPartname = nextBedItem->getName();
+	auto firstPart = keepFirstWordOnly(partName);
+	auto nextPartOf = keepFirstWordOnly(nextPartname);
+
+	g_logger().debug("First bed part id {} name {}, second part id {} name {}", it.id, firstPart, nextBedItem->getID(), nextPartOf);
+
+	return it.bedPartOf == nextBedItem->getID();
 }
 
 bool BedItem::trySleep(std::shared_ptr<Player> player) {
@@ -165,7 +175,9 @@ bool BedItem::sleep(std::shared_ptr<Player> player) {
 	g_game().addMagicEffect(player->getPosition(), CONST_ME_SLEEP);
 
 	// logout player after he sees himself walk onto the bed and it change id
-	g_dispatcher().scheduleEvent(SCHEDULER_MINTICKS, std::bind(&ProtocolGame::logout, player->client, false, false), "ProtocolGame::logout");
+	g_dispatcher().scheduleEvent(
+		SCHEDULER_MINTICKS, [client = player->client] { client->logout(false, false); }, "ProtocolGame::logout"
+	);
 
 	// change self and partner's appearance
 	updateAppearance(player);
@@ -236,8 +248,8 @@ void BedItem::regeneratePlayer(std::shared_ptr<Player> player) const {
 			regen = sleptTime / 30;
 		}
 
-		player->changeHealth(regen * g_configManager().getFloat(RATE_HEALTH_REGEN, __FUNCTION__), false);
-		player->changeMana(regen * g_configManager().getFloat(RATE_MANA_REGEN, __FUNCTION__));
+		player->changeHealth(regen * g_configManager().getFloat(RATE_HEALTH_REGEN), false);
+		player->changeMana(regen * g_configManager().getFloat(RATE_MANA_REGEN));
 	}
 
 	const int32_t soulRegen = sleptTime / (60 * 15); // RATE_SOUL_REGEN_SPEED?

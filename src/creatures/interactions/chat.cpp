@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/interactions/chat.hpp"
 #include "game/game.hpp"
 #include "utils/pugicast.hpp"
@@ -81,7 +79,9 @@ bool ChatChannel::addUser(const std::shared_ptr<Player> &player) {
 	if (id == CHANNEL_GUILD) {
 		const auto guild = player->getGuild();
 		if (guild && !guild->getMotd().empty()) {
-			g_dispatcher().scheduleEvent(150, std::bind(&Game::sendGuildMotd, &g_game(), player->getID()), "Game::sendGuildMotd");
+			g_dispatcher().scheduleEvent(
+				150, [playerId = player->getID()] { g_game().sendGuildMotd(playerId); }, "Game::sendGuildMotd"
+			);
 		}
 	}
 
@@ -143,8 +143,8 @@ bool ChatChannel::executeCanJoinEvent(const std::shared_ptr<Player> &player) {
 	LuaScriptInterface* scriptInterface = g_chat().getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		g_logger().error("[CanJoinChannelEvent::execute - Player {}, on channel {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 player->getName(), getName());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 player->getName(), getName());
 		return false;
 	}
 
@@ -169,8 +169,8 @@ bool ChatChannel::executeOnJoinEvent(const std::shared_ptr<Player> &player) {
 	LuaScriptInterface* scriptInterface = g_chat().getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		g_logger().error("[OnJoinChannelEvent::execute - Player {}, on channel {}] "
-						 "Call stack overflow. Too many lua script calls being nested",
-						 player->getName(), getName());
+		                 "Call stack overflow. Too many lua script calls being nested",
+		                 player->getName(), getName());
 		return false;
 	}
 
@@ -195,8 +195,8 @@ bool ChatChannel::executeOnLeaveEvent(const std::shared_ptr<Player> &player) {
 	LuaScriptInterface* scriptInterface = g_chat().getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		g_logger().error("[OnLeaveChannelEvent::execute - Player {}, on channel {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 player->getName(), getName());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 player->getName(), getName());
 		return false;
 	}
 
@@ -221,8 +221,8 @@ bool ChatChannel::executeOnSpeakEvent(const std::shared_ptr<Player> &player, Spe
 	LuaScriptInterface* scriptInterface = g_chat().getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		g_logger().error("[OnSpeakChannelEvent::execute - Player {}, type {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 player->getName(), fmt::underlying(type));
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 player->getName(), fmt::underlying(type));
 		return false;
 	}
 
@@ -268,7 +268,7 @@ Chat::Chat() :
 
 bool Chat::load() {
 	pugi::xml_document doc;
-	auto coreFolder = g_configManager().getString(CORE_DIRECTORY, __FUNCTION__);
+	auto coreFolder = g_configManager().getString(CORE_DIRECTORY);
 	auto folder = coreFolder + "/chatchannels/chatchannels.xml";
 	pugi::xml_parse_result result = doc.load_file(folder.c_str());
 	if (!result) {

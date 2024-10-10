@@ -15,7 +15,6 @@
 
 class Creature;
 class Game;
-class Spawn;
 
 class Monster final : public Creature {
 public:
@@ -23,7 +22,7 @@ public:
 	static int32_t despawnRange;
 	static int32_t despawnRadius;
 
-	explicit Monster(const std::shared_ptr<MonsterType> mType);
+	explicit Monster(std::shared_ptr<MonsterType> mType);
 
 	// non-copyable
 	Monster(const Monster &) = delete;
@@ -42,21 +41,22 @@ public:
 		}
 	}
 
-	void removeList() override;
 	void addList() override;
+	void removeList() override;
 
-	const std::string &getName() const override {
-		return mType->name;
-	}
+	const std::string &getName() const override;
+	void setName(const std::string &name);
+
 	// Real monster name, set on monster creation "createMonsterType(typeName)"
 	const std::string &getTypeName() const override {
 		return mType->typeName;
 	}
-	const std::string &getNameDescription() const override {
-		return mType->nameDescription;
-	}
+	const std::string &getNameDescription() const override;
+	void setNameDescription(const std::string &nameDescription) {
+		this->nameDescription = nameDescription;
+	};
 	std::string getDescription(int32_t) override {
-		return strDescription + '.';
+		return nameDescription + '.';
 	}
 
 	CreatureType_t getType() const override {
@@ -77,9 +77,9 @@ public:
 	int32_t getArmor() const override {
 		return mType->info.armor * getDefenseMultiplier();
 	}
-	int32_t getDefense() const override {
-		return mType->info.defense * getDefenseMultiplier();
-	}
+	int32_t getDefense() const override;
+
+	void addDefense(int32_t defense);
 
 	Faction_t getFaction() const override {
 		auto master = getMaster();
@@ -134,8 +134,10 @@ public:
 		this->spawnMonster = newSpawnMonster;
 	}
 
-	int32_t getReflectPercent(CombatType_t combatType, bool useCharges = false) const override;
+	double_t getReflectPercent(CombatType_t combatType, bool useCharges = false) const override;
 	uint32_t getHealingCombatValue(CombatType_t healingType) const;
+
+	void addReflectElement(CombatType_t combatType, int32_t percent);
 
 	bool canWalkOnFieldType(CombatType_t combatType) const;
 	void onAttackedCreatureDisappear(bool isLogout) override;
@@ -144,6 +146,8 @@ public:
 	void onRemoveCreature(std::shared_ptr<Creature> creature, bool isLogout) override;
 	void onCreatureMove(const std::shared_ptr<Creature> &creature, const std::shared_ptr<Tile> &newTile, const Position &newPos, const std::shared_ptr<Tile> &oldTile, const Position &oldPos, bool teleport) override;
 	void onCreatureSay(std::shared_ptr<Creature> creature, SpeakClasses type, const std::string &text) override;
+	void onAttackedByPlayer(std::shared_ptr<Player> attackerPlayer);
+	void onSpawn();
 
 	void drainHealth(std::shared_ptr<Creature> attacker, int32_t damage) override;
 	void changeHealth(int32_t healthChange, bool sendHealthChange = true) override;
@@ -160,7 +164,7 @@ public:
 	}
 
 	std::vector<CreatureIcon> getIcons() const override {
-		const auto creatureIcons = Creature::getIcons();
+		auto creatureIcons = Creature::getIcons();
 		if (!creatureIcons.empty()) {
 			return creatureIcons;
 		}
@@ -324,7 +328,7 @@ public:
 		return timeToChangeFiendish;
 	}
 
-	const std::shared_ptr<MonsterType> getMonsterType() const {
+	std::shared_ptr<MonsterType> getMonsterType() const {
 		return mType;
 	}
 
@@ -333,6 +337,12 @@ public:
 
 	bool isImmune(ConditionType_t conditionType) const override;
 	bool isImmune(CombatType_t combatType) const override;
+	void setImmune(bool immune) {
+		m_isImmune = immune;
+	}
+	bool isImmune() const {
+		return m_isImmune;
+	}
 
 	float getAttackMultiplier() const {
 		float multiplier = mType->getAttackMultiplier();
@@ -345,6 +355,14 @@ public:
 	float getDefenseMultiplier() const {
 		float multiplier = mType->getDefenseMultiplier();
 		return multiplier * std::pow(1.02f, getForgeStack());
+	}
+
+	bool isDead() const override {
+		return m_isDead;
+	}
+
+	void setDead(bool isDead) {
+		m_isDead = isDead;
 	}
 
 private:
@@ -364,12 +382,15 @@ private:
 	uint16_t forgeStack = 0;
 	ForgeClassifications_t monsterForgeClassification = ForgeClassifications_t::FORGE_NORMAL_MONSTER;
 
-	std::string strDescription;
+	std::string name;
+	std::string nameDescription;
 
 	std::shared_ptr<MonsterType> mType;
 	SpawnMonster* spawnMonster = nullptr;
 
 	int64_t lastMeleeAttack = 0;
+
+	uint16_t totalPlayersOnScreen = 0;
 
 	uint32_t attackTicks = 0;
 	uint32_t targetChangeTicks = 0;
@@ -384,8 +405,10 @@ private:
 	int32_t stepDuration = 0;
 	int32_t targetDistance = 1;
 	int32_t challengeMeleeDuration = 0;
-	uint16_t totalPlayersOnScreen = 0;
 	int32_t runAwayHealth = 0;
+	int32_t m_defense = 0;
+
+	std::unordered_map<CombatType_t, int32_t> m_reflectElementMap;
 
 	Position masterPos;
 
@@ -400,6 +423,9 @@ private:
 	bool hazardDodge = false;
 	bool hazardDamageBoost = false;
 	bool hazardDefenseBoost = false;
+
+	bool m_isDead = false;
+	bool m_isImmune = false;
 
 	void onCreatureEnter(std::shared_ptr<Creature> creature);
 	void onCreatureLeave(std::shared_ptr<Creature> creature);
@@ -454,7 +480,11 @@ private:
 	void dropLoot(std::shared_ptr<Container> corpse, std::shared_ptr<Creature> lastHitCreature) override;
 	void getPathSearchParams(const std::shared_ptr<Creature> &creature, FindPathParams &fpp) override;
 	bool useCacheMap() const override {
-		return !randomStepping;
+		// return !randomStepping;
+		//  As the map cache is done synchronously for each movement that a monster makes, it is better to disable it,
+		//  as the pathfinder, which is one of the resources that uses this cache the most,
+		//  is multithreding and thus the processing cost is divided between the threads.
+		return false;
 	}
 
 	friend class MonsterFunctions;

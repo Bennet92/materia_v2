@@ -13,7 +13,7 @@ class Player;
 class KV;
 
 struct Achievement {
-	Achievement() { }
+	Achievement() = default;
 
 	std::string name;
 	std::string description;
@@ -31,11 +31,12 @@ public:
 	explicit PlayerAchievement(Player &player);
 	bool add(uint16_t id, bool message = true, uint32_t timestamp = 0);
 	bool remove(uint16_t id);
-	bool isUnlocked(uint16_t id) const;
-	uint16_t getPoints() const;
+	[[nodiscard]] bool isUnlocked(uint16_t id) const;
+	[[nodiscard]] uint16_t getPoints() const;
 	void addPoints(uint16_t toAddPoints);
 	void removePoints(uint16_t toRemovePoints);
-	std::vector<std::pair<uint16_t, uint32_t>> getUnlockedAchievements() const;
+	[[nodiscard]] std::vector<std::pair<uint16_t, uint32_t>> getUnlockedAchievements() const;
+	void loadUnlockedAchievements();
 	void sendUnlockedSecretAchievements();
 	const std::shared_ptr<KV> &getUnlockedKV();
 

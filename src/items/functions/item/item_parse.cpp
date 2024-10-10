@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "items/functions/item/item_parse.hpp"
 #include "items/weapons/weapons.hpp"
 #include "lua/creature/movement.hpp"
@@ -68,6 +66,7 @@ void ItemParse::initParse(const std::string &tmpStrValue, pugi::xml_node attribu
 	ItemParse::parseWalk(tmpStrValue, valueAttribute, itemType);
 	ItemParse::parseAllowDistanceRead(tmpStrValue, valueAttribute, itemType);
 	ItemParse::parseImbuement(tmpStrValue, attributeNode, valueAttribute, itemType);
+	ItemParse::parseAugment(tmpStrValue, attributeNode, valueAttribute, itemType);
 	ItemParse::parseStackSize(tmpStrValue, valueAttribute, itemType);
 	ItemParse::parseSpecializedMagicLevelPoint(tmpStrValue, valueAttribute, itemType);
 	ItemParse::parseMagicShieldCapacity(tmpStrValue, valueAttribute, itemType);
@@ -126,8 +125,8 @@ void ItemParse::parseDescription(const std::string &tmpStrValue, pugi::xml_attri
 	std::string stringValue = tmpStrValue;
 	if (stringValue == "description") {
 		itemType.description = valueAttribute.as_string();
-		if (g_configManager().getBoolean(TOGGLE_GOLD_POUCH_QUICKLOOT_ONLY, __FUNCTION__) && itemType.id == ITEM_GOLD_POUCH) {
-			auto pouchLimit = g_configManager().getNumber(LOOTPOUCH_MAXLIMIT, __FUNCTION__);
+		if (g_configManager().getBoolean(TOGGLE_GOLD_POUCH_QUICKLOOT_ONLY) && itemType.id == ITEM_GOLD_POUCH) {
+			auto pouchLimit = g_configManager().getNumber(LOOTPOUCH_MAXLIMIT);
 			itemType.description = fmt::format("A bag with {} slots where you can hold your loots.", pouchLimit);
 			itemType.name = "loot pouch";
 		}
@@ -399,7 +398,7 @@ void ItemParse::parseTransform(const std::string &tmpStrValue, pugi::xml_attribu
 			itemType.decayTo = 0;
 		}
 		if (ItemType &transform = Item::items.getItemType(itemType.transformEquipTo);
-			transform.type == ITEM_TYPE_NONE) {
+		    transform.type == ITEM_TYPE_NONE) {
 			transform.type = itemType.type;
 		}
 	} else if (stringValue == "transformdeequipto") {
@@ -870,6 +869,58 @@ void ItemParse::parseImbuement(const std::string &tmpStrValue, pugi::xml_node at
 	}
 }
 
+void ItemParse::parseAugment(const std::string &tmpStrValue, pugi::xml_node attributeNode, pugi::xml_attribute valueAttribute, ItemType &itemType) {
+	if (tmpStrValue != "augments") {
+		return;
+	}
+
+	// Check if the augments value is 1 or 0 (1 = enable - 0 = disable)
+	if (valueAttribute.as_bool()) {
+		for (const auto subAttributeNode : attributeNode.children()) {
+			const pugi::xml_attribute subKeyAttribute = subAttributeNode.attribute("key");
+			if (!subKeyAttribute) {
+				continue;
+			}
+
+			const pugi::xml_attribute subValueAttribute = subAttributeNode.attribute("value");
+			if (!subValueAttribute) {
+				continue;
+			}
+
+			const auto &augmentEnum = magic_enum::enum_cast<Augment_t>(toPascalCase(subValueAttribute.as_string()));
+			if (augmentEnum.has_value()) {
+				const Augment_t augmentType = augmentEnum.value();
+				g_logger().trace("[ParseAugment::initParseAugment] - Item '{}' has an augment '{}'", itemType.name, subValueAttribute.as_string());
+				int32_t augmentValue = 0;
+				const bool hasValueDescrition = isAugmentWithoutValueDescription(augmentType);
+
+				if (hasValueDescrition) {
+					const auto it = AugmentWithoutValueDescriptionDefaultKeys.find(augmentType);
+					if (it != AugmentWithoutValueDescriptionDefaultKeys.end()) {
+						augmentValue = g_configManager().getNumber(it->second);
+					}
+				}
+
+				const auto augmentName = asLowerCaseString(subKeyAttribute.as_string());
+				const pugi::xml_object_range<pugi::xml_node_iterator> augmentValueAttributeNode = subAttributeNode.children();
+				if (!augmentValueAttributeNode.empty()) {
+					const pugi::xml_node augmentValueNode = *augmentValueAttributeNode.begin();
+					const pugi::xml_attribute augmentValueAttribute = augmentValueNode.attribute("value");
+					augmentValue = augmentValueAttribute ? pugi::cast<int32_t>(augmentValueAttribute.value()) : augmentValue;
+				} else if (!hasValueDescrition) {
+					g_logger().warn("[{}] - Item '{}' has an augment '{}' without a value", __FUNCTION__, itemType.name, augmentName);
+				}
+
+				if (augmentType != Augment_t::None) {
+					itemType.addAugment(augmentName, augmentType, augmentValue);
+				}
+			} else {
+				g_logger().warn("[{}] - Unknown type '{}'", __FUNCTION__, subValueAttribute.as_string());
+			}
+		}
+	}
+}
+
 void ItemParse::parseStackSize(const std::string &tmpStrValue, pugi::xml_attribute valueAttribute, ItemType &itemType) {
 	std::string stringValue = tmpStrValue;
 	if (stringValue == "stacksize") {
@@ -1026,7 +1077,7 @@ void ItemParse::createAndRegisterScript(ItemType &itemType, pugi::xml_node attri
 		auto stringKey = asLowerCaseString(subKeyAttribute.as_string());
 		if (stringKey == "slot") {
 			auto slotName = asLowerCaseString(subValueAttribute.as_string());
-			if (moveevent && slotName != "two-handed" && (moveevent->getEventType() == MOVE_EVENT_EQUIP || moveevent->getEventType() == MOVE_EVENT_DEEQUIP)) {
+			if (moveevent && (moveevent->getEventType() == MOVE_EVENT_EQUIP || moveevent->getEventType() == MOVE_EVENT_DEEQUIP)) {
 				if (slotName == "head") {
 					moveevent->setSlot(SLOTP_HEAD);
 				} else if (slotName == "necklace") {
@@ -1049,6 +1100,8 @@ void ItemParse::createAndRegisterScript(ItemType &itemType, pugi::xml_node attri
 					moveevent->setSlot(SLOTP_RING);
 				} else if (slotName == "ammo") {
 					moveevent->setSlot(SLOTP_AMMO);
+				} else if (slotName == "two-handed") {
+					moveevent->setSlot(SLOTP_TWO_HAND);
 				} else {
 					g_logger().warn("[{}] unknown slot type '{}'", __FUNCTION__, slotName);
 				}
@@ -1085,7 +1138,7 @@ void ItemParse::createAndRegisterScript(ItemType &itemType, pugi::xml_node attri
 				token.erase(std::find_if(token.rbegin(), token.rend(), [](unsigned char ch) {
 								return !std::isspace(ch);
 							}).base(),
-							token.end());
+				            token.end());
 
 				std::string v1;
 				bool showInDescription = false;
@@ -1163,14 +1216,16 @@ void ItemParse::createAndRegisterScript(ItemType &itemType, pugi::xml_node attri
 			} else {
 				g_logger().warn("[{}] - wandtype '{}' does not exist", __FUNCTION__, elementName);
 			}
+
 		} else if (stringKey == "chain" && weapon) {
-			if (auto value = subValueAttribute.as_double()) {
-				weapon->setChainSkillValue(value);
-				g_logger().trace("Found chain skill value '{}' for weapon: {}", value, itemType.name);
+			auto doubleValue = subValueAttribute.as_double();
+			if (doubleValue > 0) {
+				weapon->setChainSkillValue(doubleValue);
+				g_logger().trace("Found chain skill value '{}' for weapon: {}", doubleValue, itemType.name);
 			}
-			if (subValueAttribute.as_bool() == false) {
+			if (doubleValue < 0.1 && subValueAttribute.as_bool() == false) {
 				weapon->setDisabledChain();
-				g_logger().warn("Chain disabled for weapon: {}", itemType.name);
+				g_logger().trace("Chain disabled for weapon: {}", itemType.name);
 			}
 		}
 	}
@@ -1180,6 +1235,7 @@ void ItemParse::createAndRegisterScript(ItemType &itemType, pugi::xml_node attri
 			g_logger().trace("Added weapon damage from '{}', to '{}'", fromDamage, toDamage);
 			weaponWand->setMinChange(fromDamage);
 			weaponWand->setMaxChange(toDamage);
+			weaponWand->configureWeapon(itemType);
 		}
 
 		auto combat = weapon->getCombat();

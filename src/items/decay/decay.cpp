@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "items/decay/decay.hpp"
 
 #include "lib/di/container.hpp"
@@ -19,7 +17,7 @@ Decay &Decay::getInstance() {
 	return inject<Decay>();
 }
 
-void Decay::startDecay(std::shared_ptr<Item> item) {
+void Decay::startDecay(const std::shared_ptr<Item> &item) {
 	if (!item) {
 		return;
 	}
@@ -34,6 +32,8 @@ void Decay::startDecay(std::shared_ptr<Item> item) {
 		return;
 	}
 
+	g_logger().trace("Try decay item {}", item->getName());
+
 	const auto duration = item->getAttribute<int64_t>(ItemAttribute_t::DURATION);
 	if (duration <= 0 && item->hasAttribute(ItemAttribute_t::DURATION)) {
 		internalDecayItem(item);
@@ -47,11 +47,15 @@ void Decay::startDecay(std::shared_ptr<Item> item) {
 
 		int64_t timestamp = OTSYS_TIME() + duration;
 		if (decayMap.empty()) {
-			eventId = g_dispatcher().scheduleEvent(std::max<int32_t>(SCHEDULER_MINTICKS, duration), std::bind(&Decay::checkDecay, this), "Decay::checkDecay");
+			eventId = g_dispatcher().scheduleEvent(
+				std::max<int32_t>(SCHEDULER_MINTICKS, duration), [this] { checkDecay(); }, "Decay::checkDecay"
+			);
 		} else {
 			if (timestamp < decayMap.begin()->first) {
 				g_dispatcher().stopEvent(eventId);
-				eventId = g_dispatcher().scheduleEvent(std::max<int32_t>(SCHEDULER_MINTICKS, duration), std::bind(&Decay::checkDecay, this), "Decay::checkDecay");
+				eventId = g_dispatcher().scheduleEvent(
+					std::max<int32_t>(SCHEDULER_MINTICKS, duration), [this] { checkDecay(); }, "Decay::checkDecay"
+				);
 			}
 		}
 
@@ -61,7 +65,10 @@ void Decay::startDecay(std::shared_ptr<Item> item) {
 	}
 }
 
-void Decay::stopDecay(std::shared_ptr<Item> item) {
+void Decay::stopDecay(const std::shared_ptr<Item> &item) {
+	if (!item) {
+		return;
+	}
 	if (item->hasAttribute(ItemAttribute_t::DECAYSTATE)) {
 		auto timestamp = item->getAttribute<int64_t>(ItemAttribute_t::DURATION_TIMESTAMP);
 		if (item->hasAttribute(ItemAttribute_t::DURATION_TIMESTAMP)) {
@@ -138,11 +145,17 @@ void Decay::checkDecay() {
 	}
 
 	if (it != end) {
-		eventId = g_dispatcher().scheduleEvent(std::max<int32_t>(SCHEDULER_MINTICKS, static_cast<int32_t>(it->first - timestamp)), std::bind(&Decay::checkDecay, this), "Decay::checkDecay");
+		eventId = g_dispatcher().scheduleEvent(
+			std::max<int32_t>(SCHEDULER_MINTICKS, static_cast<int32_t>(it->first - timestamp)), [this] { checkDecay(); }, "Decay::checkDecay"
+		);
 	}
 }
 
-void Decay::internalDecayItem(std::shared_ptr<Item> item) {
+void Decay::internalDecayItem(const std::shared_ptr<Item> &item) {
+	if (!item) {
+		return;
+	}
+
 	const ItemType &it = Item::items[item->getID()];
 	// Remove the item and halt the decay process if a player triggers a bug where the item's decay ID matches its equip or de-equip transformation ID
 	if (it.id == it.transformEquipTo || it.id == it.transformDeEquipTo) {
@@ -150,8 +163,8 @@ void Decay::internalDecayItem(std::shared_ptr<Item> item) {
 		auto player = item->getHoldingPlayer();
 		if (player) {
 			g_logger().error("[{}] - internalDecayItem failed to player {}, item id is same from transform equip/deequip, "
-							 " item id: {}, equip to id: '{}', deequip to id '{}'",
-							 __FUNCTION__, player->getName(), it.id, it.transformEquipTo, it.transformDeEquipTo);
+			                 " item id: {}, equip to id: '{}', deequip to id '{}'",
+			                 __FUNCTION__, player->getName(), it.id, it.transformEquipTo, it.transformDeEquipTo);
 		}
 		return;
 	}
@@ -201,8 +214,8 @@ void Decay::internalDecayItem(std::shared_ptr<Item> item) {
 		ReturnValue ret = g_game().internalRemoveItem(item);
 		if (ret != RETURNVALUE_NOERROR) {
 			g_logger().error("[Decay::internalDecayItem] - internalDecayItem failed, "
-							 "error code: {}, item id: {}",
-							 static_cast<uint32_t>(ret), item->getID());
+			                 "error code: {}, item id: {}",
+			                 static_cast<uint32_t>(ret), item->getID());
 		}
 	}
 }

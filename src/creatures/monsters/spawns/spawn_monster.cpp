@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/monsters/spawns/spawn_monster.hpp"
 #include "game/game.hpp"
 #include "creatures/monsters/monster.hpp"
@@ -39,7 +37,6 @@ bool SpawnsMonster::loadFromXML(const std::string &filemonstername) {
 	this->filemonstername = filemonstername;
 	loaded = true;
 
-	uint32_t eventschedule = g_eventsScheduler().getSpawnMonsterSchedule();
 	std::string boostedNameGet = g_game().getBoostedMonsterName();
 
 	for (auto spawnMonsterNode : doc.child("monsters").children()) {
@@ -62,8 +59,7 @@ bool SpawnsMonster::loadFromXML(const std::string &filemonstername) {
 			continue;
 		}
 
-		spawnMonsterList.emplace_front(centerPos, radius);
-		SpawnMonster &spawnMonster = spawnMonsterList.front();
+		SpawnMonster &spawnMonster = spawnMonsterList.emplace_back(centerPos, radius);
 
 		for (auto childMonsterNode : spawnMonsterNode.children()) {
 			if (strcasecmp(childMonsterNode.name(), "monster") == 0) {
@@ -89,19 +85,21 @@ bool SpawnsMonster::loadFromXML(const std::string &filemonstername) {
 					centerPos.z
 				);
 
-				int32_t boostedrate = 1;
-
-				if (nameAttribute.value() == boostedNameGet) {
-					boostedrate = 2;
-				}
-
 				pugi::xml_attribute weightAttribute = childMonsterNode.attribute("weight");
 				uint32_t weight = 1;
 				if (weightAttribute) {
 					weight = pugi::cast<uint32_t>(weightAttribute.value());
 				}
 
-				spawnMonster.addMonster(nameAttribute.as_string(), pos, dir, pugi::cast<uint32_t>(childMonsterNode.attribute("spawntime").value()) * 1000, weight);
+				uint32_t scheduleInterval = g_configManager().getNumber(DEFAULT_RESPAWN_TIME);
+
+				try {
+					scheduleInterval = pugi::cast<uint32_t>(childMonsterNode.attribute("spawntime").value());
+				} catch (...) {
+					g_logger().warn("Failed to add schedule interval to monster: {}, interval: {}. Setting to default respawn time: {}", nameAttribute.value(), childMonsterNode.attribute("spawntime").value(), scheduleInterval);
+				}
+
+				spawnMonster.addMonster(nameAttribute.as_string(), pos, dir, scheduleInterval * 1000, weight);
 			}
 		}
 	}
@@ -141,7 +139,9 @@ bool SpawnsMonster::isInZone(const Position &centerPos, int32_t radius, const Po
 
 void SpawnMonster::startSpawnMonsterCheck() {
 	if (checkSpawnMonsterEvent == 0) {
-		checkSpawnMonsterEvent = g_dispatcher().scheduleEvent(getInterval(), std::bind(&SpawnMonster::checkSpawnMonster, this), "SpawnMonster::checkSpawnMonster");
+		checkSpawnMonsterEvent = g_dispatcher().scheduleEvent(
+			getInterval(), [this] { checkSpawnMonster(); }, "SpawnMonster::checkSpawnMonster"
+		);
 	}
 }
 
@@ -155,12 +155,9 @@ SpawnMonster::~SpawnMonster() {
 
 bool SpawnMonster::findPlayer(const Position &pos) {
 	auto spectators = Spectators().find<Player>(pos);
-	for (const auto &spectator : spectators) {
-		if (!spectator->getPlayer()->hasFlag(PlayerFlags_t::IgnoredByMonsters)) {
-			return true;
-		}
-	}
-	return false;
+	return std::ranges::any_of(spectators, [](const auto &spectator) {
+		return !spectator->getPlayer()->hasFlag(PlayerFlags_t::IgnoredByMonsters);
+	});
 }
 
 bool SpawnMonster::isInSpawnMonsterZone(const Position &pos) {
@@ -178,6 +175,7 @@ bool SpawnMonster::spawnMonster(uint32_t spawnMonsterId, spawnBlock_t &sb, const
 			return false;
 		}
 	} else {
+		g_logger().trace("[SpawnMonster] Spawning {} at {}", monsterType->name, sb.pos.toString());
 		if (!g_game().placeCreature(monster, sb.pos, false, true)) {
 			return false;
 		}
@@ -190,12 +188,13 @@ bool SpawnMonster::spawnMonster(uint32_t spawnMonsterId, spawnBlock_t &sb, const
 	spawnedMonsterMap[spawnMonsterId] = monster;
 	sb.lastSpawn = OTSYS_TIME();
 	g_events().eventMonsterOnSpawn(monster, sb.pos);
+	monster->onSpawn();
 	g_callbacks().executeCallback(EventCallback_t::monsterOnSpawn, &EventCallback::monsterOnSpawn, monster, sb.pos);
 	return true;
 }
 
 void SpawnMonster::startup(bool delayed) {
-	if (g_configManager().getBoolean(RANDOM_MONSTER_SPAWN, __FUNCTION__)) {
+	if (g_configManager().getBoolean(RANDOM_MONSTER_SPAWN)) {
 		for (auto it = spawnMonsterMap.begin(); it != spawnMonsterMap.end(); ++it) {
 			auto &[spawnMonsterId, sb] = *it;
 			for (auto &[monsterType, weight] : sb.monsterTypes) {
@@ -225,7 +224,7 @@ void SpawnMonster::startup(bool delayed) {
 			continue;
 		}
 		if (delayed) {
-			g_dispatcher().addEvent(std::bind(&SpawnMonster::scheduleSpawn, this, spawnMonsterId, sb, mType, 0, true), "SpawnMonster::startup");
+			g_dispatcher().addEvent([this, spawnMonsterId, &sb, mType] { scheduleSpawn(spawnMonsterId, sb, mType, 0, true); }, __FUNCTION__);
 		} else {
 			scheduleSpawn(spawnMonsterId, sb, mType, 0, true);
 		}
@@ -258,14 +257,16 @@ void SpawnMonster::checkSpawnMonster() {
 		}
 
 		if (mType->info.isBlockable) {
-			spawnMonster(spawnMonsterId, sb, mType, true);
+			spawnMonster(spawnMonsterId, sb, mType);
 		} else {
 			scheduleSpawn(spawnMonsterId, sb, mType, 3 * NONBLOCKABLE_SPAWN_MONSTER_INTERVAL);
 		}
 	}
 
 	if (spawnedMonsterMap.size() < spawnMonsterMap.size()) {
-		checkSpawnMonsterEvent = g_dispatcher().scheduleEvent(getInterval(), std::bind(&SpawnMonster::checkSpawnMonster, this), "SpawnMonster::checkSpawnMonster");
+		checkSpawnMonsterEvent = g_dispatcher().scheduleEvent(
+			getInterval(), [this] { checkSpawnMonster(); }, "SpawnMonster::checkSpawnMonster"
+		);
 	}
 }
 
@@ -274,7 +275,9 @@ void SpawnMonster::scheduleSpawn(uint32_t spawnMonsterId, spawnBlock_t &sb, cons
 		spawnMonster(spawnMonsterId, sb, mType, startup);
 	} else {
 		g_game().addMagicEffect(sb.pos, CONST_ME_TELEPORT);
-		g_dispatcher().scheduleEvent(NONBLOCKABLE_SPAWN_MONSTER_INTERVAL, std::bind(&SpawnMonster::scheduleSpawn, this, spawnMonsterId, sb, mType, interval - NONBLOCKABLE_SPAWN_MONSTER_INTERVAL, startup), "SpawnMonster::scheduleSpawn");
+		g_dispatcher().scheduleEvent(
+			NONBLOCKABLE_SPAWN_MONSTER_INTERVAL, [=, this, &sb] { scheduleSpawn(spawnMonsterId, sb, mType, interval - NONBLOCKABLE_SPAWN_MONSTER_INTERVAL, startup); }, "SpawnMonster::scheduleSpawn"
+		);
 	}
 }
 
@@ -292,7 +295,7 @@ void SpawnMonster::cleanup() {
 }
 
 bool SpawnMonster::addMonster(const std::string &name, const Position &pos, Direction dir, uint32_t scheduleInterval, uint32_t weight /*= 1*/) {
-	std::string variant = "";
+	std::string variant;
 	for (const auto &zone : Zone::getZones(pos)) {
 		if (!zone->getMonsterVariant().empty()) {
 			variant = zone->getMonsterVariant() + "|";
@@ -312,7 +315,7 @@ bool SpawnMonster::addMonster(const std::string &name, const Position &pos, Dire
 		boostedrate = 2;
 	}
 	// eventschedule is a whole percentage, so we need to multiply by 100 to match the order of magnitude of the other values
-	scheduleInterval = scheduleInterval * 100 / std::max((uint32_t)1, (g_configManager().getNumber(RATE_SPAWN, __FUNCTION__) * boostedrate * eventschedule));
+	scheduleInterval = scheduleInterval * 100 / std::max((uint32_t)1, (g_configManager().getNumber(RATE_SPAWN) * boostedrate * eventschedule));
 	if (scheduleInterval < MONSTER_MINSPAWN_INTERVAL) {
 		g_logger().warn("[SpawnsMonster::addMonster] - {} {} spawntime cannot be less than {} seconds, set to {} by default.", name, pos.toString(), MONSTER_MINSPAWN_INTERVAL / 1000, MONSTER_MINSPAWN_INTERVAL / 1000);
 		scheduleInterval = MONSTER_MINSPAWN_INTERVAL;
@@ -336,7 +339,7 @@ bool SpawnMonster::addMonster(const std::string &name, const Position &pos, Dire
 			g_logger().error("[SpawnMonster] Monster {} already exists in spawn block at {}", name, pos.toString());
 			return false;
 		}
-		if (monsterType->isBoss() && sb->monsterTypes.size() > 0) {
+		if (monsterType->isBoss() && !sb->monsterTypes.empty()) {
 			g_logger().error("[SpawnMonster] Boss monster {} has been added to spawn block with other monsters. This is not allowed.", name);
 			return false;
 		}
@@ -429,10 +432,8 @@ std::shared_ptr<MonsterType> spawnBlock_t::getMonsterType() const {
 }
 
 bool spawnBlock_t::hasBoss() const {
-	for (const auto &[monsterType, weight] : monsterTypes) {
-		if (monsterType->isBoss()) {
-			return true;
-		}
-	}
-	return false;
+	return std::ranges::any_of(monsterTypes, [](const auto &pair) {
+		const auto &[monsterType, weight] = pair;
+		return monsterType->isBoss();
+	});
 }

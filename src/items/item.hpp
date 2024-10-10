@@ -291,6 +291,12 @@ public:
 		return isStoreItem() || hasOwner();
 	}
 
+	static std::string parseAugmentDescription(std::shared_ptr<Item> item, bool inspect = false) {
+		if (!item) {
+			return "";
+		}
+		return items[item->getID()].parseAugmentDescription(inspect);
+	}
 	static std::string parseImbuementDescription(std::shared_ptr<Item> item);
 	static std::string parseShowDurationSpeed(int32_t speed, bool &begin);
 	static std::string parseShowDuration(std::shared_ptr<Item> item);
@@ -418,6 +424,29 @@ public:
 			return getAttribute<int32_t>(ItemAttribute_t::EXTRADEFENSE);
 		}
 		return items[id].extraDefense;
+	}
+	std::vector<std::shared_ptr<AugmentInfo>> getAugments() const {
+		return items[id].augments;
+	}
+	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellNameAndType(const std::string &spellName, Augment_t augmentType) const {
+		std::vector<std::shared_ptr<AugmentInfo>> augments;
+		for (auto &augment : items[id].augments) {
+			if (strcasecmp(augment->spellName.c_str(), spellName.c_str()) == 0 && augment->type == augmentType) {
+				augments.push_back(augment);
+			}
+		}
+
+		return augments;
+	}
+	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellName(const std::string &spellName) const {
+		std::vector<std::shared_ptr<AugmentInfo>> augments;
+		for (auto &augment : items[id].augments) {
+			if (strcasecmp(augment->spellName.c_str(), spellName.c_str()) == 0) {
+				augments.push_back(augment);
+			}
+		}
+
+		return augments;
 	}
 	uint8_t getImbuementSlot() const {
 		if (hasAttribute(ItemAttribute_t::IMBUEMENT_SLOT)) {
@@ -568,7 +597,11 @@ public:
 		count = n;
 	}
 
-	static uint32_t countByType(std::shared_ptr<Item> item, int32_t subType) {
+	static uint32_t countByType(const std::shared_ptr<Item> &item, int32_t subType) {
+		if (!item) {
+			return 0;
+		}
+
 		if (subType == -1 || subType == item->getSubType()) {
 			return item->getItemCount();
 		}
@@ -686,9 +719,9 @@ public:
 			return 0;
 		}
 		return quadraticPoly(
-			g_configManager().getFloat(RUSE_CHANCE_FORMULA_A, __FUNCTION__),
-			g_configManager().getFloat(RUSE_CHANCE_FORMULA_B, __FUNCTION__),
-			g_configManager().getFloat(RUSE_CHANCE_FORMULA_C, __FUNCTION__),
+			g_configManager().getFloat(RUSE_CHANCE_FORMULA_A),
+			g_configManager().getFloat(RUSE_CHANCE_FORMULA_B),
+			g_configManager().getFloat(RUSE_CHANCE_FORMULA_C),
 			getTier()
 		);
 	}
@@ -698,9 +731,9 @@ public:
 			return 0;
 		}
 		return quadraticPoly(
-			g_configManager().getFloat(ONSLAUGHT_CHANCE_FORMULA_A, __FUNCTION__),
-			g_configManager().getFloat(ONSLAUGHT_CHANCE_FORMULA_B, __FUNCTION__),
-			g_configManager().getFloat(ONSLAUGHT_CHANCE_FORMULA_C, __FUNCTION__),
+			g_configManager().getFloat(ONSLAUGHT_CHANCE_FORMULA_A),
+			g_configManager().getFloat(ONSLAUGHT_CHANCE_FORMULA_B),
+			g_configManager().getFloat(ONSLAUGHT_CHANCE_FORMULA_C),
 			getTier()
 		);
 	}
@@ -710,9 +743,9 @@ public:
 			return 0;
 		}
 		return quadraticPoly(
-			g_configManager().getFloat(MOMENTUM_CHANCE_FORMULA_A, __FUNCTION__),
-			g_configManager().getFloat(MOMENTUM_CHANCE_FORMULA_B, __FUNCTION__),
-			g_configManager().getFloat(MOMENTUM_CHANCE_FORMULA_C, __FUNCTION__),
+			g_configManager().getFloat(MOMENTUM_CHANCE_FORMULA_A),
+			g_configManager().getFloat(MOMENTUM_CHANCE_FORMULA_B),
+			g_configManager().getFloat(MOMENTUM_CHANCE_FORMULA_C),
 			getTier()
 		);
 	}
@@ -722,9 +755,9 @@ public:
 			return 0;
 		}
 		return quadraticPoly(
-			g_configManager().getFloat(TRANSCENDANCE_CHANCE_FORMULA_A, __FUNCTION__),
-			g_configManager().getFloat(TRANSCENDANCE_CHANCE_FORMULA_B, __FUNCTION__),
-			g_configManager().getFloat(TRANSCENDANCE_CHANCE_FORMULA_C, __FUNCTION__),
+			g_configManager().getFloat(TRANSCENDANCE_CHANCE_FORMULA_A),
+			g_configManager().getFloat(TRANSCENDANCE_CHANCE_FORMULA_B),
+			g_configManager().getFloat(TRANSCENDANCE_CHANCE_FORMULA_C),
 			getTier()
 		);
 	}
@@ -735,7 +768,7 @@ public:
 		}
 
 		auto tier = getAttribute<uint8_t>(ItemAttribute_t::TIER);
-		if (tier > g_configManager().getNumber(FORGE_MAX_ITEM_TIER, __FUNCTION__)) {
+		if (tier > g_configManager().getNumber(FORGE_MAX_ITEM_TIER)) {
 			g_logger().error("{} - Item {} have a wrong tier {}", __FUNCTION__, getName(), tier);
 			return 0;
 		}
@@ -743,7 +776,7 @@ public:
 		return tier;
 	}
 	void setTier(uint8_t tier) {
-		auto configTier = g_configManager().getNumber(FORGE_MAX_ITEM_TIER, __FUNCTION__);
+		auto configTier = g_configManager().getNumber(FORGE_MAX_ITEM_TIER);
 		if (tier > configTier) {
 			g_logger().error("{} - It is not possible to set a tier higher than {}", __FUNCTION__, configTier);
 			return;

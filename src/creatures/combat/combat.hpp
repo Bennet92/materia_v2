@@ -72,8 +72,8 @@ public:
 private:
 	void onChainCombat(std::shared_ptr<Creature> creature, uint8_t &chainTargets, uint8_t &chainDistance, bool &backtracking);
 
-	uint8_t m_chainTargets = 0;
 	uint8_t m_chainDistance = 0;
+	uint8_t m_chainTargets = 0;
 	bool m_backtracking = false;
 	bool m_fromLua = false;
 };
@@ -84,7 +84,7 @@ public:
 };
 
 struct CombatParams {
-	std::forward_list<std::shared_ptr<Condition>> conditionList;
+	std::vector<std::shared_ptr<Condition>> conditionList;
 
 	std::unique_ptr<ValueCallback> valueCallback;
 	std::unique_ptr<TileCallback> tileCallback;
@@ -125,7 +125,7 @@ public:
 			data_[row] = new bool[cols];
 
 			for (uint32_t col = 0; col < cols; ++col) {
-				data_[row][col] = 0;
+				data_[row][col] = false;
 			}
 		}
 	}
@@ -218,7 +218,7 @@ public:
 	// non-assignable
 	AreaCombat &operator=(const AreaCombat &) = delete;
 
-	void getList(const Position &centerPos, const Position &targetPos, std::forward_list<std::shared_ptr<Tile>> &list) const;
+	void getList(const Position &centerPos, const Position &targetPos, std::vector<std::shared_ptr<Tile>> &list) const;
 
 	void setupArea(const std::list<uint32_t> &list, uint32_t rows);
 	void setupArea(int32_t length, int32_t spread);
@@ -290,7 +290,7 @@ public:
 	static void doCombatDispel(std::shared_ptr<Creature> caster, std::shared_ptr<Creature> target, const CombatParams &params);
 	static void doCombatDispel(std::shared_ptr<Creature> caster, const Position &position, const std::unique_ptr<AreaCombat> &area, const CombatParams &params);
 
-	static void getCombatArea(const Position &centerPos, const Position &targetPos, const std::unique_ptr<AreaCombat> &area, std::forward_list<std::shared_ptr<Tile>> &list);
+	static void getCombatArea(const Position &centerPos, const Position &targetPos, const std::unique_ptr<AreaCombat> &area, std::vector<std::shared_ptr<Tile>> &list);
 
 	static bool isInPvpZone(std::shared_ptr<Creature> attacker, std::shared_ptr<Creature> target);
 	static bool isProtected(std::shared_ptr<Player> attacker, std::shared_ptr<Player> target);
@@ -320,11 +320,11 @@ public:
 		return area != nullptr;
 	}
 	void addCondition(const std::shared_ptr<Condition> condition) {
-		params.conditionList.emplace_front(condition);
+		params.conditionList.emplace_back(condition);
 	}
 	void setPlayerCombatValues(formulaType_t formulaType, double mina, double minb, double maxa, double maxb);
 	void postCombatEffects(std::shared_ptr<Creature> caster, const Position &origin, const Position &pos) const {
-		postCombatEffects(caster, origin, pos, params);
+		postCombatEffects(std::move(caster), origin, pos, params);
 	}
 
 	void setOrigin(CombatOrigin origin) {
@@ -393,7 +393,7 @@ private:
 	 * @param damage The combat damage.
 	 * @return The calculated level formula.
 	 */
-	int32_t getLevelFormula(std::shared_ptr<Player> player, const std::shared_ptr<Spell> wheelSpell, const CombatDamage &damage) const;
+	int32_t getLevelFormula(std::shared_ptr<Player> player, std::shared_ptr<Spell> wheelSpell, const CombatDamage &damage) const;
 	CombatDamage getCombatDamage(std::shared_ptr<Creature> creature, std::shared_ptr<Creature> target) const;
 
 	// configureable

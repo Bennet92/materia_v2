@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "config/configmanager.hpp"
 #include "game/game.hpp"
 #include "creatures/players/grouping/groups.hpp"
@@ -43,7 +41,7 @@ PlayerFlags_t Groups::getFlagFromNumber(uint8_t value) {
 	return magic_enum::enum_value<PlayerFlags_t>(value);
 }
 
-bool Groups::reload() const {
+bool Groups::reload() {
 	// Clear groups
 	g_game().groups.getGroups().clear();
 	return g_game().groups.load();
@@ -69,7 +67,7 @@ void parseGroupFlags(Group &group, const pugi::xml_node &groupNode) {
 
 bool Groups::load() {
 	pugi::xml_document doc;
-	auto folder = g_configManager().getString(CORE_DIRECTORY, __FUNCTION__) + "/XML/groups.xml";
+	auto folder = g_configManager().getString(CORE_DIRECTORY) + "/XML/groups.xml";
 	pugi::xml_parse_result result = doc.load_file(folder.c_str());
 	if (!result) {
 		printXMLError(__FUNCTION__, folder, result);
@@ -93,17 +91,18 @@ bool Groups::load() {
 		// Parsing group flags
 		parseGroupFlags(group, groupNode);
 
-		groups_vector.push_back(group);
+		groups_vector.emplace_back(std::make_shared<Group>(group));
 	}
 	groups_vector.shrink_to_fit();
 	return true;
 }
 
-Group* Groups::getGroup(uint16_t id) {
-	for (Group &group : groups_vector) {
-		if (group.id == id) {
-			return &group;
-		}
+std::shared_ptr<Group> Groups::getGroup(uint16_t id) const {
+	if (auto it = std::find_if(groups_vector.begin(), groups_vector.end(), [id](auto group_it) {
+			return group_it->id == id;
+		});
+	    it != groups_vector.end()) {
+		return *it;
 	}
 	return nullptr;
 }

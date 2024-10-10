@@ -36,13 +36,14 @@ local itemsTable = {
 		{ itemName = "strong health potion", clientId = 236, buy = 115 },
 		{ itemName = "strong mana potion", clientId = 237, buy = 93 },
 		{ itemName = "supreme health potion", clientId = 23375, buy = 625 },
-		{ itemName = "ultimate health potion", clientId = 7643, buy = 438 },
-		{ itemName = "ultimate mana potion", clientId = 23373, buy = 379 },
+		{ itemName = "ultimate health potion", clientId = 7643, buy = 379 },
+		{ itemName = "ultimate mana potion", clientId = 23373, buy = 438 },
 		{ itemName = "ultimate spirit potion", clientId = 23374, buy = 438 },
 		{ itemName = "vial", clientId = 2874, sell = 5 },
 	},
 	["creature products"] = {
 		{ itemName = "cowbell", clientId = 21204, sell = 210 },
+		{ itemName = "execowtioner mask", clientId = 21201, sell = 240 },
 		{ itemName = "giant pacifier", clientId = 21199, sell = 170 },
 		{ itemName = "glob of glooth", clientId = 21182, sell = 125 },
 		{ itemName = "glooth injection tube", clientId = 21103, sell = 350 },
@@ -113,15 +114,11 @@ local function creatureSayCallback(npc, creature, type, message)
 		return false
 	end
 
-	local formattedCategoryNames = {}
-	for categoryName, _ in pairs(itemsTable) do
-		table.insert(formattedCategoryNames, "{" .. categoryName .. "}")
-	end
-
 	local categoryTable = itemsTable[message:lower()]
 
 	if categoryTable then
-		npcHandler:say("Of course, just browse through my wares.", npc, player)
+		local remainingCategories = npc:getRemainingShopCategories(message:lower(), itemsTable)
+		npcHandler:say("Of course, just browse through my wares. You can also look at " .. remainingCategories .. ".", npc, player)
 		npc:openShopWindowTable(player, categoryTable)
 	end
 	return true

@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "game/game.hpp"
 #include "creatures/creature.hpp"
 #include "lua/functions/creatures/creature_functions.hpp"
@@ -54,7 +52,7 @@ int CreatureFunctions::luaCreatureGetEvents(lua_State* L) {
 	lua_createtable(L, static_cast<int>(eventList.size()), 0);
 
 	int index = 0;
-	for (const auto eventPtr : eventList) {
+	for (const auto &eventPtr : eventList) {
 		pushString(L, eventPtr->getName());
 		lua_rawseti(L, -2, ++index);
 	}
@@ -643,7 +641,7 @@ int CreatureFunctions::luaCreatureSetOutfit(lua_State* L) {
 	std::shared_ptr<Creature> creature = getUserdataShared<Creature>(L, 1);
 	if (creature) {
 		Outfit_t outfit = getOutfit(L, 2);
-		if (g_configManager().getBoolean(WARN_UNSAFE_SCRIPTS, __FUNCTION__) && outfit.lookType != 0 && !g_game().isLookTypeRegistered(outfit.lookType)) {
+		if (g_configManager().getBoolean(WARN_UNSAFE_SCRIPTS) && outfit.lookType != 0 && !g_game().isLookTypeRegistered(outfit.lookType)) {
 			g_logger().warn("[CreatureFunctions::luaCreatureSetOutfit] An unregistered creature looktype type with id '{}' was blocked to prevent client crash.", outfit.lookType);
 			return 1;
 		}
@@ -793,7 +791,7 @@ int CreatureFunctions::luaCreatureTeleportTo(lua_State* L) {
 
 	const Position oldPosition = creature->getPosition();
 	if (auto ret = g_game().internalTeleport(creature, position, pushMovement);
-		ret != RETURNVALUE_NOERROR) {
+	    ret != RETURNVALUE_NOERROR) {
 		g_logger().debug("[{}] Failed to teleport creature {}, on position {}, error code: {}", __FUNCTION__, creature->getName(), oldPosition.toString(), getReturnMessage(ret));
 		pushBoolean(L, false);
 		return 1;
@@ -938,7 +936,7 @@ int CreatureFunctions::luaCreatureGetPathTo(lua_State* L) {
 	fpp.clearSight = getBoolean(L, 6, fpp.clearSight);
 	fpp.maxSearchDist = getNumber<int32_t>(L, 7, fpp.maxSearchDist);
 
-	stdext::arraylist<Direction> dirList(128);
+	std::vector<Direction> dirList;
 	if (creature->getPathTo(position, dirList, fpp)) {
 		lua_newtable(L);
 
@@ -1020,11 +1018,11 @@ int CreatureFunctions::luaCreatureSetIcon(lua_State* L) {
 		return 1;
 	}
 	const auto key = getString(L, 2);
-	auto category = getNumber<CreatureIconCategory_t>(L, 3);
-	auto count = getNumber<uint16_t>(L, 5, 0);
+	const auto category = getNumber<CreatureIconCategory_t>(L, 3);
+	const auto count = getNumber<uint16_t>(L, 5, 0);
 	CreatureIcon creatureIcon;
 	if (category == CreatureIconCategory_t::Modifications) {
-		auto icon = getNumber<CreatureIconModifications_t>(L, 5);
+		auto icon = getNumber<CreatureIconModifications_t>(L, 4);
 		creatureIcon = CreatureIcon(icon, count);
 	} else {
 		auto icon = getNumber<CreatureIconQuests_t>(L, 4);

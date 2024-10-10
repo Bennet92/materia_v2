@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "lua/global/baseevents.hpp"
 #include "lua/scripts/lua_environment.hpp"
 #include "utils/tools.hpp"
@@ -20,12 +18,12 @@ bool BaseEvents::loadFromXml() {
 	}
 
 	std::string scriptsName = getScriptBaseName();
-	std::string basePath = g_configManager().getString(CORE_DIRECTORY, __FUNCTION__) + "/" + scriptsName + "/";
+	std::string basePath = g_configManager().getString(CORE_DIRECTORY) + "/" + scriptsName + "/";
 	if (getScriptInterface().loadFile(
 			basePath + "lib/" + scriptsName + ".lua",
 			scriptsName + ".lua"
 		)
-		== -1) {
+	    == -1) {
 		g_logger().warn(__FUNCTION__, scriptsName, scriptsName);
 	}
 
@@ -107,8 +105,8 @@ bool Event::checkScript(const std::string &basePath, const std::string &scriptsN
 	int32_t id = testInterface->getEvent(getScriptEventName());
 	if (id == -1) {
 		g_logger().warn("[Event::checkScript] - Event "
-						"{} not found {}",
-						getScriptEventName(), scriptFile);
+		                "{} not found {}",
+		                getScriptEventName(), scriptFile);
 		return false;
 	}
 	return true;

@@ -66,7 +66,7 @@ public:
 	}
 
 	uint32_t getHealthGain() const {
-		return healthGain * g_configManager().getFloat(RATE_HEALTH_REGEN, __FUNCTION__);
+		return healthGain * g_configManager().getFloat(RATE_HEALTH_REGEN);
 	}
 
 	void setHealthTicks(uint32_t value) {
@@ -74,7 +74,7 @@ public:
 	}
 
 	uint32_t getHealthTicks() const {
-		return healthTicks / g_configManager().getFloat(RATE_HEALTH_REGEN_SPEED, __FUNCTION__);
+		return healthTicks / g_configManager().getFloat(RATE_HEALTH_REGEN_SPEED);
 	}
 
 	void setManaGain(uint32_t value) {
@@ -82,7 +82,7 @@ public:
 	}
 
 	uint32_t getManaGain() const {
-		return manaGain * g_configManager().getFloat(RATE_MANA_REGEN, __FUNCTION__);
+		return manaGain * g_configManager().getFloat(RATE_MANA_REGEN);
 	}
 
 	void setManaTicks(uint32_t value) {
@@ -90,7 +90,7 @@ public:
 	}
 
 	uint32_t getManaTicks() const {
-		return manaTicks / g_configManager().getFloat(RATE_MANA_REGEN_SPEED, __FUNCTION__);
+		return manaTicks / g_configManager().getFloat(RATE_MANA_REGEN_SPEED);
 	}
 
 private:
@@ -252,6 +252,14 @@ public:
 		return str;
 	}
 
+	std::string parseAugmentDescription(bool inspect = false) const;
+	std::string getFormattedAugmentDescription(const std::shared_ptr<AugmentInfo> &augmentInfo) const;
+
+	void addAugment(std::string spellName, Augment_t augmentType, int32_t value) {
+		auto augmentInfo = std::make_shared<AugmentInfo>(spellName, augmentType, value);
+		augments.emplace_back(augmentInfo);
+	}
+
 	void setImbuementType(ImbuementTypes_t imbuementType, uint16_t slotMaxTier) {
 		imbuementTypes[imbuementType] = std::min<uint16_t>(IMBUEMENT_MAX_TIER, slotMaxTier);
 	}
@@ -330,6 +338,8 @@ public:
 	uint8_t stackSize = 100;
 
 	int8_t hitChance = 0;
+
+	std::vector<std::shared_ptr<AugmentInfo>> augments;
 
 	// 12.90
 	bool wearOut = false;
@@ -433,6 +443,18 @@ public:
 	}
 	const std::unordered_map<uint16_t, uint16_t> &getDummys() const {
 		return dummys;
+	}
+
+	static const std::string getAugmentNameByType(Augment_t augmentType);
+
+	static bool isAugmentWithoutValueDescription(Augment_t augmentType) {
+		static std::vector<Augment_t> vector = {
+			Augment_t::IncreasedDamage,
+			Augment_t::PowerfulImpact,
+			Augment_t::StrongImpact,
+		};
+
+		return std::find(vector.begin(), vector.end(), augmentType) != vector.end();
 	}
 
 private:

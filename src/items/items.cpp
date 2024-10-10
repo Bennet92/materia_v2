@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "items/functions/item/item_parse.hpp"
 #include "items/items.hpp"
 #include "items/weapons/weapons.hpp"
@@ -67,6 +65,47 @@ ItemTypes_t Items::getLootType(const std::string &strValue) {
 	return ITEM_TYPE_NONE;
 }
 
+const std::string Items::getAugmentNameByType(Augment_t augmentType) {
+	std::string augmentTypeName = magic_enum::enum_name(augmentType).data();
+	augmentTypeName = toStartCaseWithSpace(augmentTypeName);
+	if (!isAugmentWithoutValueDescription(augmentType)) {
+		toLowerCaseString(augmentTypeName);
+	}
+	return augmentTypeName;
+}
+
+std::string ItemType::parseAugmentDescription(bool inspect /*= false*/) const {
+	if (augments.empty()) {
+		return "";
+	}
+
+	std::vector<std::string> descriptions;
+	for (const auto &augment : augments) {
+		descriptions.push_back(getFormattedAugmentDescription(augment));
+	}
+
+	if (inspect) {
+		return fmt::format("{}.", fmt::join(descriptions.begin(), descriptions.end(), ", "));
+	} else {
+		return fmt::format("\nAugments: ({}).", fmt::join(descriptions.begin(), descriptions.end(), ", "));
+	}
+}
+
+std::string ItemType::getFormattedAugmentDescription(const std::shared_ptr<AugmentInfo> &augmentInfo) const {
+	const std::string augmentName = Items::getAugmentNameByType(augmentInfo->type);
+	std::string augmentSpellNameCapitalized = augmentInfo->spellName;
+	capitalizeWordsIgnoringString(augmentSpellNameCapitalized, " of ");
+
+	char signal = augmentInfo->value > 0 ? '-' : '+';
+
+	if (Items::isAugmentWithoutValueDescription(augmentInfo->type)) {
+		return fmt::format("{} -> {}", augmentSpellNameCapitalized, augmentName);
+	} else if (augmentInfo->type == Augment_t::Cooldown) {
+		return fmt::format("{} -> {}{}s {}", augmentSpellNameCapitalized, signal, augmentInfo->value / 1000, augmentName);
+	}
+	return fmt::format("{} -> {:+}% {}", augmentSpellNameCapitalized, augmentInfo->value, augmentName);
+}
+
 bool Items::reload() {
 	clear();
 	loadFromProtobuf();
@@ -81,7 +120,7 @@ bool Items::reload() {
 void Items::loadFromProtobuf() {
 	using namespace Canary::protobuf::appearances;
 
-	bool supportAnimation = g_configManager().getBoolean(OLD_PROTOCOL, __FUNCTION__);
+	bool supportAnimation = g_configManager().getBoolean(OLD_PROTOCOL);
 	for (uint32_t it = 0; it < g_game().m_appearancesPtr->object_size(); ++it) {
 		Appearance object = g_game().m_appearancesPtr->object(it);
 
@@ -197,7 +236,7 @@ void Items::loadFromProtobuf() {
 
 bool Items::loadFromXml() {
 	pugi::xml_document doc;
-	auto folder = g_configManager().getString(CORE_DIRECTORY, __FUNCTION__) + "/items/items.xml";
+	auto folder = g_configManager().getString(CORE_DIRECTORY) + "/items/items.xml";
 	pugi::xml_parse_result result = doc.load_file(folder.c_str());
 	if (!result) {
 		printXMLError(__FUNCTION__, folder, result);
@@ -219,8 +258,8 @@ bool Items::loadFromXml() {
 		auto toIdAttribute = itemNode.attribute("toid");
 		if (!toIdAttribute) {
 			g_logger().warn("[Items::loadFromXml] - "
-							"tag fromid: {} without toid",
-							fromIdAttribute.value());
+			                "tag fromid: {} without toid",
+			                fromIdAttribute.value());
 			continue;
 		}
 
@@ -261,12 +300,12 @@ void Items::parseItemNode(const pugi::xml_node &itemNode, uint16_t id) {
 	}
 
 	if (std::string xmlName = itemNode.attribute("name").as_string();
-		!xmlName.empty() && itemType.name != xmlName) {
+	    !xmlName.empty() && itemType.name != xmlName) {
 		if (!itemType.name.empty()) {
 			if (auto it = std::find_if(nameToItems.begin(), nameToItems.end(), [id](const auto nameMapIt) {
 					return nameMapIt.second == id;
 				});
-				it != nameToItems.end()) {
+			    it != nameToItems.end()) {
 				nameToItems.erase(it);
 			}
 		}

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "utils/const.hpp"
+
 // Enums
 // Connection and networkmessage.
 enum { FORCE_CLOSE = true };
@@ -55,7 +57,8 @@ enum SessionEndInformations : uint8_t {
 
 enum Resource_t : uint8_t {
 	RESOURCE_BANK = 0x00,
-	RESOURCE_INVENTORY = 0x01,
+	RESOURCE_INVENTORY_MONEY = 0x01,
+	RESOURCE_INVENTORY_CURRENCY_CUSTOM = 0x02,
 	RESOURCE_PREY_CARDS = 0x0A,
 	RESOURCE_TASK_HUNTING = 0x32,
 	RESOURCE_FORGE_DUST = 0x46,
@@ -113,13 +116,14 @@ enum Supply_Stash_Actions_t : uint8_t {
 };
 
 struct HighscoreCharacter {
-	HighscoreCharacter(std::string name, uint64_t points, uint32_t id, uint32_t rank, uint16_t level, uint8_t vocation) :
+	HighscoreCharacter(std::string name, uint64_t points, uint32_t id, uint32_t rank, uint16_t level, uint8_t vocation, std::string loyaltyTitle) :
 		name(std::move(name)),
 		points(points),
 		id(id),
 		rank(rank),
 		level(level),
-		vocation(vocation) { }
+		vocation(vocation),
+		loyaltyTitle(std::move(loyaltyTitle)) { }
 
 	std::string name;
 	uint64_t points;
@@ -127,4 +131,5 @@ struct HighscoreCharacter {
 	uint32_t rank;
 	uint16_t level;
 	uint8_t vocation;
+	std::string loyaltyTitle;
 };

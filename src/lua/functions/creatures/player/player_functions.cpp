@@ -7,7 +7,7 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
+#include "lua/functions/creatures/player/player_functions.hpp"
 
 #include "creatures/combat/spells.hpp"
 #include "creatures/creature.hpp"
@@ -15,11 +15,13 @@
 #include "creatures/players/player.hpp"
 #include "creatures/players/wheel/player_wheel.hpp"
 #include "creatures/players/achievement/player_achievement.hpp"
+#include "creatures/players/cyclopedia/player_badge.hpp"
+#include "creatures/players/cyclopedia/player_cyclopedia.hpp"
+#include "creatures/players/cyclopedia/player_title.hpp"
 #include "game/game.hpp"
 #include "io/iologindata.hpp"
 #include "io/ioprey.hpp"
 #include "items/item.hpp"
-#include "lua/functions/creatures/player/player_functions.hpp"
 #include "game/scheduling/save_manager.hpp"
 #include "game/scheduling/dispatcher.hpp"
 #include "map/spectators.hpp"
@@ -405,7 +407,7 @@ int PlayerFunctions::luaPlayerGetPreyExperiencePercentage(lua_State* L) {
 	// player:getPreyExperiencePercentage(raceId)
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1)) {
 		if (const std::unique_ptr<PreySlot> &slot = player->getPreyWithMonster(getNumber<uint16_t>(L, 2, 0));
-			slot && slot->isOccupied() && slot->bonus == PreyBonus_Experience && slot->bonusTimeLeft > 0) {
+		    slot && slot->isOccupied() && slot->bonus == PreyBonus_Experience && slot->bonusTimeLeft > 0) {
 			lua_pushnumber(L, static_cast<lua_Number>(100 + slot->bonusPercentage));
 		} else {
 			lua_pushnumber(L, 100);
@@ -455,7 +457,7 @@ int PlayerFunctions::luaPlayerGetPreyLootPercentage(lua_State* L) {
 	// player:getPreyLootPercentage(raceid)
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1)) {
 		if (const std::unique_ptr<PreySlot> &slot = player->getPreyWithMonster(getNumber<uint16_t>(L, 2, 0));
-			slot && slot->isOccupied() && slot->bonus == PreyBonus_Loot) {
+		    slot && slot->isOccupied() && slot->bonus == PreyBonus_Loot) {
 			lua_pushnumber(L, slot->bonusPercentage);
 		} else {
 			lua_pushnumber(L, 0);
@@ -470,7 +472,7 @@ int PlayerFunctions::luaPlayerisMonsterPrey(lua_State* L) {
 	// player:isMonsterPrey(raceid)
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1)) {
 		if (const std::unique_ptr<PreySlot> &slot = player->getPreyWithMonster(getNumber<uint16_t>(L, 2, 0));
-			slot && slot->isOccupied()) {
+		    slot && slot->isOccupied()) {
 			pushBoolean(L, true);
 		} else {
 			pushBoolean(L, false);
@@ -484,7 +486,7 @@ int PlayerFunctions::luaPlayerisMonsterPrey(lua_State* L) {
 int PlayerFunctions::luaPlayerPreyThirdSlot(lua_State* L) {
 	// get: player:preyThirdSlot() set: player:preyThirdSlot(bool)
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
-		const auto &slot = player->getPreySlotById(PreySlot_Three)) {
+	    const auto &slot = player->getPreySlotById(PreySlot_Three)) {
 		if (!slot) {
 			lua_pushnil(L);
 		} else if (lua_gettop(L) == 1) {
@@ -511,7 +513,7 @@ int PlayerFunctions::luaPlayerPreyThirdSlot(lua_State* L) {
 int PlayerFunctions::luaPlayerTaskThirdSlot(lua_State* L) {
 	// get: player:taskHuntingThirdSlot() set: player:taskHuntingThirdSlot(bool)
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
-		const auto &slot = player->getTaskHuntingSlotById(PreySlot_Three)) {
+	    const auto &slot = player->getTaskHuntingSlotById(PreySlot_Three)) {
 		if (lua_gettop(L) == 1) {
 			pushBoolean(L, slot->state != PreyTaskDataState_Locked);
 		} else {
@@ -1384,13 +1386,13 @@ int PlayerFunctions::luaPlayerSetVocation(lua_State* L) {
 		return 1;
 	}
 
-	Vocation* vocation;
+	std::shared_ptr<Vocation> vocation;
 	if (isNumber(L, 2)) {
 		vocation = g_vocations().getVocation(getNumber<uint16_t>(L, 2));
 	} else if (isString(L, 2)) {
 		vocation = g_vocations().getVocation(g_vocations().getVocationId(getString(L, 2)));
 	} else if (isUserdata(L, 2)) {
-		vocation = getUserdata<Vocation>(L, 2);
+		vocation = getUserdataShared<Vocation>(L, 2);
 	} else {
 		vocation = nullptr;
 	}
@@ -1602,7 +1604,7 @@ int PlayerFunctions::luaPlayerGetGroup(lua_State* L) {
 
 int PlayerFunctions::luaPlayerSetGroup(lua_State* L) {
 	// player:setGroup(group)
-	Group* group = getUserdata<Group>(L, 2);
+	std::shared_ptr<Group> group = getUserdataShared<Group>(L, 2);
 	if (!group) {
 		pushBoolean(L, false);
 		return 1;
@@ -1742,6 +1744,11 @@ int PlayerFunctions::luaPlayerSetStorageValue(lua_State* L) {
 		return 1;
 	}
 
+	if (key == 0) {
+		reportErrorFunc("Storage key is nil");
+		return 1;
+	}
+
 	if (player) {
 		player->addStorageValue(key, value);
 		pushBoolean(L, true);
@@ -1760,6 +1767,7 @@ int PlayerFunctions::luaPlayerGetStorageValueByName(lua_State* L) {
 		return 0;
 	}
 
+	g_logger().warn("The function 'player:getStorageValueByName' is deprecated and will be removed in future versions, please use KV system");
 	auto name = getString(L, 2);
 	lua_pushnumber(L, player->getStorageValueByName(name));
 	return 1;
@@ -1774,6 +1782,7 @@ int PlayerFunctions::luaPlayerSetStorageValueByName(lua_State* L) {
 		return 0;
 	}
 
+	g_logger().warn("The function 'player:setStorageValueByName' is deprecated and will be removed in future versions, please use KV system");
 	auto storageName = getString(L, 2);
 	int32_t value = getNumber<int32_t>(L, 3);
 
@@ -1855,6 +1864,8 @@ int PlayerFunctions::luaPlayerAddItem(lua_State* L) {
 			if (!hasTable) {
 				lua_pushnil(L);
 			}
+
+			player->sendCancelMessage(ret);
 			return 1;
 		}
 
@@ -2261,10 +2272,23 @@ int PlayerFunctions::luaPlayerGetParty(lua_State* L) {
 }
 
 int PlayerFunctions::luaPlayerAddOutfit(lua_State* L) {
-	// player:addOutfit(lookType)
+	// player:addOutfit(lookType or name, addon = 0)
 	std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
 	if (player) {
-		player->addOutfit(getNumber<uint16_t>(L, 2), 0);
+		auto addon = getNumber<uint8_t>(L, 3, 0);
+		if (lua_isnumber(L, 2)) {
+			player->addOutfit(getNumber<uint16_t>(L, 2), addon);
+		} else if (lua_isstring(L, 2)) {
+			const std::string &outfitName = getString(L, 2);
+			const auto &outfit = Outfits::getInstance().getOutfitByName(player->getSex(), outfitName);
+			if (!outfit) {
+				reportErrorFunc("Outfit not found");
+				return 1;
+			}
+
+			player->addOutfit(outfit->lookType, addon);
+		}
+
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -2723,7 +2747,7 @@ int PlayerFunctions::luaPlayerRemoveBlessing(lua_State* L) {
 }
 
 int PlayerFunctions::luaPlayerGetBlessingCount(lua_State* L) {
-	// player:getBlessingCount(index)
+	// player:getBlessingCount(index[, storeCount = false])
 	std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
 	uint8_t index = getNumber<uint8_t>(L, 2);
 	if (index == 0) {
@@ -2731,7 +2755,7 @@ int PlayerFunctions::luaPlayerGetBlessingCount(lua_State* L) {
 	}
 
 	if (player) {
-		lua_pushnumber(L, player->getBlessingCount(index));
+		lua_pushnumber(L, player->getBlessingCount(index, getBoolean(L, 3, false)));
 	} else {
 		lua_pushnil(L);
 	}
@@ -3015,14 +3039,14 @@ int PlayerFunctions::luaPlayerSetGhostMode(lua_State* L) {
 	if (player->isInGhostMode()) {
 		for (const auto &it : g_game().getPlayers()) {
 			if (!it.second->isAccessPlayer()) {
-				it.second->notifyStatusChange(player, VIPSTATUS_OFFLINE);
+				it.second->vip()->notifyStatusChange(player, VipStatus_t::Offline);
 			}
 		}
 		IOLoginData::updateOnlineStatus(player->getGUID(), false);
 	} else {
 		for (const auto &it : g_game().getPlayers()) {
 			if (!it.second->isAccessPlayer()) {
-				it.second->notifyStatusChange(player, player->statusVipList);
+				it.second->vip()->notifyStatusChange(player, player->vip()->getStatus());
 			}
 		}
 		IOLoginData::updateOnlineStatus(player->getGUID(), true);
@@ -3219,23 +3243,23 @@ int PlayerFunctions::luaPlayerSetGrindingXpBoost(lua_State* L) {
 	return 1;
 }
 
-int PlayerFunctions::luaPlayerGetStoreXpBoost(lua_State* L) {
-	// player:getStoreXpBoost()
+int PlayerFunctions::luaPlayerGetXpBoostPercent(lua_State* L) {
+	// player:getXpBoostPercent()
 	std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
 	if (player) {
-		lua_pushnumber(L, player->getStoreXpBoost());
+		lua_pushnumber(L, player->getXpBoostPercent());
 	} else {
 		lua_pushnil(L);
 	}
 	return 1;
 }
 
-int PlayerFunctions::luaPlayerSetStoreXpBoost(lua_State* L) {
-	// player:setStoreXpBoost(value)
+int PlayerFunctions::luaPlayerSetXpBoostPercent(lua_State* L) {
+	// player:setXpBoostPercent(value)
 	std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
 	if (player) {
-		uint16_t experience = getNumber<uint16_t>(L, 2);
-		player->setStoreXpBoost(experience);
+		uint16_t percent = getNumber<uint16_t>(L, 2);
+		player->setXpBoostPercent(percent);
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -3267,12 +3291,12 @@ int PlayerFunctions::luaPlayerSetStaminaXpBoost(lua_State* L) {
 	return 1;
 }
 
-int PlayerFunctions::luaPlayerSetExpBoostStamina(lua_State* L) {
-	// player:setExpBoostStamina(percent)
+int PlayerFunctions::luaPlayerSetXpBoostTime(lua_State* L) {
+	// player:setXpBoostTime(timeLeft)
 	std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
 	if (player) {
-		uint16_t stamina = getNumber<uint16_t>(L, 2);
-		player->setExpBoostStamina(stamina);
+		uint16_t timeLeft = getNumber<uint16_t>(L, 2);
+		player->setXpBoostTime(timeLeft);
 		player->sendStats();
 		pushBoolean(L, true);
 	} else {
@@ -3281,11 +3305,11 @@ int PlayerFunctions::luaPlayerSetExpBoostStamina(lua_State* L) {
 	return 1;
 }
 
-int PlayerFunctions::luaPlayerGetExpBoostStamina(lua_State* L) {
-	// player:getExpBoostStamina()
+int PlayerFunctions::luaPlayerGetXpBoostTime(lua_State* L) {
+	// player:getXpBoostTime()
 	std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
 	if (player) {
-		lua_pushnumber(L, player->getExpBoostStamina());
+		lua_pushnumber(L, player->getXpBoostTime());
 	} else {
 		lua_pushnil(L);
 	}
@@ -3565,7 +3589,7 @@ int PlayerFunctions::luaPlayerBosstiaryCooldownTimer(lua_State* L) {
 int PlayerFunctions::luaPlayerGetBosstiaryLevel(lua_State* L) {
 	// player:getBosstiaryLevel(name)
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
-		player) {
+	    player) {
 		const auto mtype = g_monsters().getMonsterType(getString(L, 2));
 		if (mtype) {
 			uint32_t bossId = mtype->info.raceid;
@@ -3587,7 +3611,7 @@ int PlayerFunctions::luaPlayerGetBosstiaryLevel(lua_State* L) {
 int PlayerFunctions::luaPlayerGetBosstiaryKills(lua_State* L) {
 	// player:getBosstiaryKills(name)
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
-		player) {
+	    player) {
 		const auto mtype = g_monsters().getMonsterType(getString(L, 2));
 		if (mtype) {
 			uint32_t bossId = mtype->info.raceid;
@@ -3609,7 +3633,7 @@ int PlayerFunctions::luaPlayerGetBosstiaryKills(lua_State* L) {
 int PlayerFunctions::luaPlayerAddBosstiaryKill(lua_State* L) {
 	// player:addBosstiaryKill(name[, amount = 1])
 	if (std::shared_ptr<Player> player = getUserdataShared<Player>(L, 1);
-		player) {
+	    player) {
 		const auto mtype = g_monsters().getMonsterType(getString(L, 2));
 		if (mtype) {
 			g_ioBosstiary().addBosstiaryKill(player, mtype, getNumber<uint32_t>(L, 3, 1));
@@ -3997,9 +4021,9 @@ int PlayerFunctions::luaPlayerAvatarTimer(lua_State* L) {
 	}
 
 	if (lua_gettop(L) == 1) {
-		lua_pushnumber(L, (lua_Number)player->wheel()->getOnThinkTimer(WheelOnThink_t::AVATAR));
+		lua_pushnumber(L, (lua_Number)player->wheel()->getOnThinkTimer(WheelOnThink_t::AVATAR_SPELL));
 	} else {
-		player->wheel()->setOnThinkTimer(WheelOnThink_t::AVATAR, getNumber<int64_t>(L, 2));
+		player->wheel()->setOnThinkTimer(WheelOnThink_t::AVATAR_SPELL, getNumber<int64_t>(L, 2));
 		pushBoolean(L, true);
 	}
 	return 1;
@@ -4213,7 +4237,12 @@ int PlayerFunctions::luaPlayerAddAchievement(lua_State* L) {
 		achievementId = g_game().getAchievementByName(getString(L, 2)).id;
 	}
 
-	pushBoolean(L, player->achiev()->add(achievementId, getBoolean(L, 3, true)));
+	bool success = player->achiev()->add(achievementId, getBoolean(L, 3, true));
+	if (success) {
+		player->sendTakeScreenshot(SCREENSHOT_TYPE_ACHIEVEMENT);
+	}
+
+	pushBoolean(L, success);
 	return 1;
 }
 
@@ -4276,6 +4305,155 @@ int PlayerFunctions::luaPlayerRemoveAchievementPoints(lua_State* L) {
 	if (points > 0) {
 		player->achiev()->removePoints(points);
 	}
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerAddBadge(lua_State* L) {
+	// player:addBadge(id)
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_PLAYER_NOT_FOUND));
+		return 1;
+	}
+
+	player->badge()->add(getNumber<uint8_t>(L, 2, 0));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerAddTitle(lua_State* L) {
+	// player:addTitle(id)
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_PLAYER_NOT_FOUND));
+		return 1;
+	}
+
+	player->title()->manage(true, getNumber<uint8_t>(L, 2, 0));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerGetTitles(lua_State* L) {
+	// player:getTitles()
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_PLAYER_NOT_FOUND));
+		return 1;
+	}
+
+	auto playerTitles = player->title()->getUnlockedTitles();
+	lua_createtable(L, static_cast<int>(playerTitles.size()), 0);
+
+	int index = 0;
+	for (const auto &title : playerTitles) {
+		lua_createtable(L, 0, 3);
+		setField(L, "id", title.first.m_id);
+		setField(L, "name", player->title()->getNameBySex(player->getSex(), title.first.m_maleName, title.first.m_femaleName));
+		setField(L, "description", title.first.m_description);
+		lua_rawseti(L, -2, ++index);
+	}
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerSetCurrentTitle(lua_State* L) {
+	// player:setCurrentTitle(id)
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_PLAYER_NOT_FOUND));
+		return 1;
+	}
+
+	const auto &title = g_game().getTitleById(getNumber<uint8_t>(L, 2, 0));
+	if (title.m_id == 0) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_VARIANT_NOT_FOUND));
+		return 1;
+	}
+
+	player->title()->setCurrentTitle(title.m_id);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerCreateTransactionSummary(lua_State* L) {
+	// player:createTransactionSummary(type, amount[, id = 0])
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_PLAYER_NOT_FOUND));
+		return 1;
+	}
+
+	auto type = getNumber<uint8_t>(L, 2, 0);
+	if (type == 0) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_VARIANT_NOT_FOUND));
+		return 1;
+	}
+
+	auto amount = getNumber<uint16_t>(L, 3, 1);
+	auto id = getString(L, 4, "");
+
+	player->cyclopedia()->updateStoreSummary(type, amount, id);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerTakeScreenshot(lua_State* L) {
+	// player:takeScreenshot(screenshotType)
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	auto screenshotType = getNumber<Screenshot_t>(L, 2);
+	player->sendTakeScreenshot(screenshotType);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerSendIconBakragore(lua_State* L) {
+	// player:sendIconBakragore()
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	auto iconType = getNumber<IconBakragore>(L, 2);
+	player->sendIconBakragore(iconType);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerRemoveIconBakragore(lua_State* L) {
+	// player:removeIconBakragore(iconType or nil for remove all bakragore icons)
+	const auto &player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	auto iconType = getNumber<IconBakragore>(L, 2, IconBakragore::None);
+	if (iconType == IconBakragore::None) {
+		player->removeBakragoreIcons();
+	} else {
+		player->removeBakragoreIcon(iconType);
+	}
+
+	pushBoolean(L, true);
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerSendCreatureAppear(lua_State* L) {
+	auto player = getUserdataShared<Player>(L, 1);
+	if (!player) {
+		reportErrorFunc(getErrorDesc(LUA_ERROR_PLAYER_NOT_FOUND));
+		return 1;
+	}
+
+	bool isLogin = getBoolean(L, 2, false);
+	player->sendCreatureAppear(player, player->getPosition(), isLogin);
 	pushBoolean(L, true);
 	return 1;
 }

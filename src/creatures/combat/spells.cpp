@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/combat/combat.hpp"
 #include "creatures/combat/spells.hpp"
 #include "creatures/monsters/monster.hpp"
@@ -25,10 +23,10 @@ Spells::Spells() = default;
 Spells::~Spells() = default;
 
 TalkActionResult_t Spells::playerSaySpell(std::shared_ptr<Player> player, std::string &words) {
-	auto maxOnline = g_configManager().getNumber(MAX_PLAYERS_PER_ACCOUNT, __FUNCTION__);
+	auto maxOnline = g_configManager().getNumber(MAX_PLAYERS_PER_ACCOUNT);
 	auto tile = player->getTile();
 	if (maxOnline > 1 && player->getAccountType() < ACCOUNT_TYPE_GAMEMASTER && tile && !tile->hasFlag(TILESTATE_PROTECTIONZONE)) {
-		auto maxOutsizePZ = g_configManager().getNumber(MAX_PLAYERS_OUTSIDE_PZ_PER_ACCOUNT, __FUNCTION__);
+		auto maxOutsizePZ = g_configManager().getNumber(MAX_PLAYERS_OUTSIDE_PZ_PER_ACCOUNT);
 		auto accountPlayers = g_game().getPlayersByAccount(player->getAccount());
 		int countOutsizePZ = 0;
 		for (const auto &accountPlayer : accountPlayers) {
@@ -108,7 +106,7 @@ void Spells::clear() {
 
 bool Spells::hasInstantSpell(const std::string &word) const {
 	if (auto iterate = instants.find(word);
-		iterate != instants.end()) {
+	    iterate != instants.end()) {
 		return true;
 	}
 	return false;
@@ -127,8 +125,8 @@ bool Spells::registerInstantLuaEvent(const std::shared_ptr<InstantSpell> instant
 		// Checks if there is any spell registered with the same name
 		if (hasInstantSpell(words)) {
 			g_logger().warn("[Spells::registerInstantLuaEvent] - "
-							"Duplicate registered instant spell with words: {}, on spell with name: {}",
-							words, instantName);
+			                "Duplicate registered instant spell with words: {}, on spell with name: {}",
+			                words, instantName);
 			return false;
 		}
 		// Register spell word in the map
@@ -166,7 +164,7 @@ std::list<uint16_t> Spells::getSpellsByVocation(uint16_t vocationId) {
 		vocSpellsIt = vocSpells.find(vocationId);
 
 		if (vocSpellsIt != vocSpells.end()
-			&& vocSpellsIt->second) {
+		    && vocSpellsIt->second) {
 			spellsList.push_back(it.second->getSpellId());
 		}
 	}
@@ -361,8 +359,8 @@ bool CombatSpell::executeCastSpell(std::shared_ptr<Creature> creature, const Lua
 	// onCastSpell(creature, var)
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		g_logger().error("[CombatSpell::executeCastSpell - Creature {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 creature->getName());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 creature->getName());
 		return false;
 	}
 
@@ -552,7 +550,7 @@ bool Spell::playerRuneSpellCheck(std::shared_ptr<Player> player, const Position 
 		return false;
 	}
 
-	if (range != -1 && !g_game().canThrowObjectTo(playerPos, toPos, true, range, range)) {
+	if (range != -1 && !g_game().canThrowObjectTo(playerPos, toPos, SightLine_CheckSightLineAndFloor, range, range)) {
 		player->sendCancelMessage(RETURNVALUE_DESTINATIONOUTOFREACH);
 		g_game().addMagicEffect(player->getPosition(), CONST_ME_POFF);
 		return false;
@@ -630,11 +628,48 @@ void Spell::setWheelOfDestinyBoost(WheelSpellBoost_t boost, WheelSpellGrade_t gr
 	}
 }
 
+void Spell::getCombatDataAugment(std::shared_ptr<Player> player, CombatDamage &damage) {
+	if (!(damage.instantSpellName).empty()) {
+		const auto equippedAugmentItems = player->getEquippedAugmentItems();
+		for (const auto &item : equippedAugmentItems) {
+			const auto augments = item->getAugmentsBySpellName(damage.instantSpellName);
+			for (auto &augment : augments) {
+				if (augment->value == 0) {
+					continue;
+				}
+				if (augment->type == Augment_t::IncreasedDamage || augment->type == Augment_t::PowerfulImpact || augment->type == Augment_t::StrongImpact) {
+					const float augmentPercent = augment->value / 100.0;
+					damage.primary.value += static_cast<int32_t>(damage.primary.value * augmentPercent);
+					damage.secondary.value += static_cast<int32_t>(damage.secondary.value * augmentPercent);
+				} else if (augment->type != Augment_t::Cooldown) {
+					const int32_t augmentValue = augment->value * 100;
+					damage.lifeLeech += augment->type == Augment_t::LifeLeech ? augmentValue : 0;
+					damage.manaLeech += augment->type == Augment_t::ManaLeech ? augmentValue : 0;
+					damage.criticalDamage += augment->type == Augment_t::CriticalExtraDamage ? augmentValue : 0;
+				}
+			}
+		}
+	}
+};
+
+int32_t Spell::calculateAugmentSpellCooldownReduction(std::shared_ptr<Player> player) const {
+	int32_t spellCooldown = 0;
+	const auto equippedAugmentItems = player->getEquippedAugmentItemsByType(Augment_t::Cooldown);
+	for (const auto &item : equippedAugmentItems) {
+		const auto augments = item->getAugmentsBySpellNameAndType(getName(), Augment_t::Cooldown);
+		for (auto &augment : augments) {
+			spellCooldown += augment->value;
+		}
+	}
+
+	return spellCooldown;
+}
+
 void Spell::applyCooldownConditions(std::shared_ptr<Player> player) const {
 	WheelSpellGrade_t spellGrade = player->wheel()->getSpellUpgrade(getName());
 	bool isUpgraded = getWheelOfDestinyUpgraded() && static_cast<uint8_t>(spellGrade) > 0;
 	// Safety check to prevent division by zero
-	auto rateCooldown = g_configManager().getFloat(RATE_SPELL_COOLDOWN, __FUNCTION__);
+	auto rateCooldown = g_configManager().getFloat(RATE_SPELL_COOLDOWN);
 	if (std::abs(rateCooldown) < std::numeric_limits<float>::epsilon()) {
 		rateCooldown = 0.1; // Safe minimum value
 	}
@@ -644,8 +679,10 @@ void Spell::applyCooldownConditions(std::shared_ptr<Player> player) const {
 		if (isUpgraded) {
 			spellCooldown -= getWheelOfDestinyBoost(WheelSpellBoost_t::COOLDOWN, spellGrade);
 		}
-		g_logger().debug("[{}] spell name: {}, spellCooldown: {}, bonus: {}", __FUNCTION__, name, spellCooldown, player->wheel()->getSpellBonus(name, WheelSpellBoost_t::COOLDOWN));
+		int32_t augmentCooldownReduction = calculateAugmentSpellCooldownReduction(player);
+		g_logger().debug("[{}] spell name: {}, spellCooldown: {}, bonus: {}, augment {}", __FUNCTION__, name, spellCooldown, player->wheel()->getSpellBonus(name, WheelSpellBoost_t::COOLDOWN), augmentCooldownReduction);
 		spellCooldown -= player->wheel()->getSpellBonus(name, WheelSpellBoost_t::COOLDOWN);
+		spellCooldown -= augmentCooldownReduction;
 		if (spellCooldown > 0) {
 			std::shared_ptr<Condition> condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN, spellCooldown / rateCooldown, 0, false, m_spellId);
 			player->addCondition(condition);
@@ -727,7 +764,6 @@ uint32_t Spell::getManaCost(std::shared_ptr<Player> player) const {
 	if (manaPercent != 0) {
 		uint32_t maxMana = player->getMaxMana();
 		uint32_t manaCost = (maxMana * manaPercent) / 100;
-		WheelSpellGrade_t spellGrade = player->wheel()->getSpellUpgrade(getName());
 		if (manaRedution > manaCost) {
 			return 0;
 		}
@@ -750,7 +786,7 @@ bool InstantSpell::playerCastInstant(std::shared_ptr<Player> player, std::string
 		var.type = VARIANT_NUMBER;
 		var.number = player->getID();
 	} else if (needTarget || casterTargetOrDirection) {
-		std::shared_ptr<Creature> target = nullptr;
+		std::shared_ptr<Creature> target;
 		bool useDirection = false;
 
 		if (hasParam) {
@@ -862,7 +898,7 @@ bool InstantSpell::playerCastInstant(std::shared_ptr<Player> player, std::string
 bool InstantSpell::canThrowSpell(std::shared_ptr<Creature> creature, std::shared_ptr<Creature> target) const {
 	const Position &fromPos = creature->getPosition();
 	const Position &toPos = target->getPosition();
-	if (fromPos.z != toPos.z || (range == -1 && !g_game().canThrowObjectTo(fromPos, toPos, checkLineOfSight)) || (range != -1 && !g_game().canThrowObjectTo(fromPos, toPos, checkLineOfSight, range, range))) {
+	if (fromPos.z != toPos.z || (range == -1 && !g_game().canThrowObjectTo(fromPos, toPos, checkLineOfSight ? SightLine_CheckSightLineAndFloor : SightLine_NoCheck)) || (range != -1 && !g_game().canThrowObjectTo(fromPos, toPos, checkLineOfSight ? SightLine_CheckSightLineAndFloor : SightLine_NoCheck, range, range))) {
 		return false;
 	}
 	return true;
@@ -912,8 +948,8 @@ bool InstantSpell::executeCastSpell(std::shared_ptr<Creature> creature, const Lu
 	// onCastSpell(creature, var)
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		g_logger().error("[InstantSpell::executeCastSpell - Creature {} words {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 creature->getName(), getWords());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 creature->getName(), getWords());
 		return false;
 	}
 
@@ -1012,7 +1048,7 @@ bool RuneSpell::executeUse(std::shared_ptr<Player> player, std::shared_ptr<Item>
 	}
 
 	postCastSpell(player);
-	if (hasCharges && item && g_configManager().getBoolean(REMOVE_RUNE_CHARGES, __FUNCTION__)) {
+	if (hasCharges && item && g_configManager().getBoolean(REMOVE_RUNE_CHARGES)) {
 		int32_t newCount = std::max<int32_t>(0, item->getItemCount() - 1);
 		g_game().transformItem(item, item->getID(), newCount);
 		player->updateSupplyTracker(item);
@@ -1046,7 +1082,7 @@ bool RuneSpell::castSpell(std::shared_ptr<Creature> creature, std::shared_ptr<Cr
 bool RuneSpell::internalCastSpell(std::shared_ptr<Creature> creature, const LuaVariant &var, bool isHotkey) {
 	bool result;
 	if (isLoadedCallback()) {
-		result = executeCastSpell(creature, var, isHotkey);
+		result = executeCastSpell(std::move(creature), var, isHotkey);
 	} else {
 		result = false;
 	}
@@ -1057,8 +1093,8 @@ bool RuneSpell::executeCastSpell(std::shared_ptr<Creature> creature, const LuaVa
 	// onCastSpell(creature, var, isHotkey)
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		g_logger().error("[RuneSpell::executeCastSpell - Creature {} runeId {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 creature->getName(), getRuneItemId());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 creature->getName(), getRuneItemId());
 		return false;
 	}
 

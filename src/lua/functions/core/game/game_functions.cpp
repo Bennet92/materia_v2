@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "core.hpp"
 #include "creatures/monsters/monster.hpp"
 #include "game/functions/game_reload.hpp"
@@ -27,6 +25,9 @@
 #include "lua/callbacks/event_callback.hpp"
 #include "lua/callbacks/events_callbacks.hpp"
 #include "creatures/players/achievement/player_achievement.hpp"
+#include "creatures/players/cyclopedia/player_badge.hpp"
+#include "creatures/players/cyclopedia/player_cyclopedia.hpp"
+#include "creatures/players/cyclopedia/player_title.hpp"
 #include "map/spectators.hpp"
 
 // Game
@@ -177,7 +178,7 @@ int GameFunctions::luaGameGetPlayers(lua_State* L) {
 int GameFunctions::luaGameLoadMap(lua_State* L) {
 	// Game.loadMap(path)
 	const std::string &path = getString(L, 1);
-	g_dispatcher().addEvent([path]() { g_game().loadMap(path); }, "GameFunctions::luaGameLoadMap");
+	g_dispatcher().addEvent([path]() { g_game().loadMap(path); }, __FUNCTION__);
 	return 0;
 }
 
@@ -185,8 +186,19 @@ int GameFunctions::luaGameloadMapChunk(lua_State* L) {
 	// Game.loadMapChunk(path, position, remove)
 	const std::string &path = getString(L, 1);
 	const Position &position = getPosition(L, 2);
-	g_dispatcher().addEvent([path, position]() { g_game().loadMap(path, position); }, "GameFunctions::luaGameloadMapChunk");
+	g_dispatcher().addEvent([path, position]() { g_game().loadMap(path, position); }, __FUNCTION__);
 	return 0;
+}
+
+int GameFunctions::luaGameGetExperienceForLevel(lua_State* L) {
+	// Game.getExperienceForLevel(level)
+	const uint32_t level = getNumber<uint32_t>(L, 1);
+	if (level == 0) {
+		reportErrorFunc("Level must be greater than 0.");
+	} else {
+		lua_pushnumber(L, Player::getExpForLevel(level));
+	}
+	return 1;
 }
 
 int GameFunctions::luaGameGetMonsterCount(lua_State* L) {
@@ -212,7 +224,7 @@ int GameFunctions::luaGameGetMonsterTypes(lua_State* L) {
 	const auto type = g_monsters().monsters;
 	lua_createtable(L, type.size(), 0);
 
-	for (const auto [typeName, mType] : type) {
+	for (const auto &[typeName, mType] : type) {
 		pushUserdata<MonsterType>(L, mType);
 		setMetatable(L, -1, "MonsterType");
 		lua_setfield(L, -2, typeName.c_str());
@@ -435,6 +447,7 @@ int GameFunctions::luaGameCreateMonster(lua_State* L) {
 	if (g_game().placeCreature(monster, position, extended, force)) {
 		g_events().eventMonsterOnSpawn(monster, position);
 		g_callbacks().executeCallback(EventCallback_t::monsterOnSpawn, &EventCallback::monsterOnSpawn, monster, position);
+		monster->onSpawn();
 		const auto &mtype = monster->getMonsterType();
 		if (mtype && mtype->info.raceid > 0 && mtype->info.bosstiaryRace == BosstiaryRarity_t::RARITY_ARCHFOE) {
 			for (const auto &spectator : Spectators().find<Player>(monster->getPosition(), true)) {
@@ -515,7 +528,7 @@ int GameFunctions::luaGameGetBestiaryCharm(lua_State* L) {
 	lua_createtable(L, c_list.size(), 0);
 
 	int index = 0;
-	for (const auto charmPtr : c_list) {
+	for (const auto &charmPtr : c_list) {
 		pushUserdata<Charm>(L, charmPtr);
 		setMetatable(L, -1, "Charm");
 		lua_rawseti(L, -2, ++index);
@@ -697,7 +710,7 @@ int GameFunctions::luaGameGetInfluencedMonsters(lua_State* L) {
 
 int GameFunctions::luaGameGetLadderIds(lua_State* L) {
 	// Game.getLadderIds()
-	const auto ladders = Item::items.getLadders();
+	const auto &ladders = Item::items.getLadders();
 	lua_createtable(L, static_cast<int>(ladders.size()), 0);
 	int index = 0;
 	for (const auto ladderId : ladders) {
@@ -715,11 +728,11 @@ int GameFunctions::luaGameGetDummies(lua_State* L) {
 	 * @details This function provides a table containing two sub-tables: one for free dummies and one for house (or premium) dummies.
 
 	* @note usage on lua:
-		local dummies = Game.getDummies()
-		local rate = dummies[1] -- Retrieve dummy rate
+	    local dummies = Game.getDummies()
+	    local rate = dummies[1] -- Retrieve dummy rate
 	*/
 
-	const auto dummies = Item::items.getDummys();
+	const auto &dummies = Item::items.getDummys();
 	lua_createtable(L, dummies.size(), 0);
 	for (const auto &[dummyId, rate] : dummies) {
 		lua_pushnumber(L, static_cast<lua_Number>(rate));

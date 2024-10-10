@@ -49,10 +49,8 @@ function playerLoginGlobal.onLogin(player)
 	end
 
 	-- Boosted
-	player:sendTextMessage(MESSAGE_BOOSTED_CREATURE, "Today's boosted creature: " .. Game.getBoostedCreature() .. " \
-	Boosted creatures yield more experience points, carry more loot than usual and respawn at a faster rate.")
-	player:sendTextMessage(MESSAGE_BOOSTED_CREATURE, "Today's boosted boss: " .. Game.getBoostedBoss() .. " \
-	Boosted bosses contain more loot and count more kills for your Bosstiary.")
+	player:sendTextMessage(MESSAGE_BOOSTED_CREATURE, string.format("Today's boosted creature: %s.\nBoosted creatures yield more experience points, carry more loot than usual, and respawn at a faster rate.", Game.getBoostedCreature()))
+	player:sendTextMessage(MESSAGE_BOOSTED_CREATURE, string.format("Today's boosted boss: %s.\nBoosted bosses contain more loot and count more kills for your Bosstiary.", Game.getBoostedBoss()))
 
 	-- Rewards
 	local rewards = #player:getRewardList()
@@ -118,6 +116,24 @@ function playerLoginGlobal.onLogin(player)
 	player:setStaminaXpBoost(player:getFinalBonusStamina() * 100)
 	player:getFinalLowLevelBonus()
 
+	-- Updates the player's VIP status and executes corresponding actions if applicable.
+	if configManager.getBoolean(configKeys.VIP_SYSTEM_ENABLED) then
+		local isVipNow = player:isVip()
+		local wasVip = player:kv():scoped("account"):get("vip-system") or false
+
+		if wasVip ~= isVipNow then
+			if wasVip then
+				player:onRemoveVip()
+			else
+				player:onAddVip(player:getVipDays())
+			end
+		end
+
+		if isVipNow then
+			CheckPremiumAndPrint(player, MESSAGE_LOGIN)
+		end
+	end
+
 	-- Set Ghost Mode
 	if player:getGroup():getId() >= GROUP_TYPE_GAMEMASTER then
 		player:setGhostMode(true)
@@ -153,10 +169,19 @@ function playerLoginGlobal.onLogin(player)
 		onMovementRemoveProtection(playerId, player:getPosition(), 10)
 	end
 
+	-- Change support outfit to a normal outfit to open customize character without crashes
+	local playerOutfit = player:getOutfit()
+	if table.contains({ 75, 266, 302 }, playerOutfit.lookType) then
+		playerOutfit.lookType = 136
+		playerOutfit.lookAddons = 0
+		player:setOutfit(playerOutfit)
+	end
+
 	player:initializeLoyaltySystem()
 	player:registerEvent("PlayerDeath")
 	player:registerEvent("DropLoot")
 	player:registerEvent("BossParticipation")
+	player:registerEvent("UpdatePlayerOnAdvancedLevel")
 	return true
 end
 

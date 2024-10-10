@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/combat/spells.hpp"
 #include "creatures/monsters/monster.hpp"
 #include "creatures/npcs/npc.hpp"
@@ -289,13 +287,13 @@ void LuaFunctionsLoader::setWeakMetatable(lua_State* L, int32_t index, const std
 		int metatable = lua_gettop(L);
 
 		for (static const std::vector<std::string> methodKeys = { "__index", "__metatable", "__eq" };
-			 const std::string &metaKey : methodKeys) {
+		     const std::string &metaKey : methodKeys) {
 			lua_getfield(L, childMetatable, metaKey.c_str());
 			lua_setfield(L, metatable, metaKey.c_str());
 		}
 
 		for (static const std::vector<int> methodIndexes = { 'h', 'p', 't' };
-			 int metaIndex : methodIndexes) {
+		     int metaIndex : methodIndexes) {
 			lua_rawgeti(L, childMetatable, metaIndex);
 			lua_rawseti(L, metatable, metaIndex);
 		}

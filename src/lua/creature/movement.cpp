@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "game/game.hpp"
 #include "lua/creature/events.hpp"
 #include "lua/callbacks/event_callback.hpp"
@@ -23,8 +21,6 @@ void MoveEvents::clear(bool isFromXML /*= false*/) {
 
 			for (int moveEventType = 0; moveEventType < MOVE_EVENT_LAST; ++moveEventType) {
 				auto &eventList = moveEventList.moveEvent[moveEventType];
-
-				int originalSize = eventList.size();
 
 				eventList.remove_if([&](const std::shared_ptr<MoveEvent> &moveEvent) {
 					bool removed = moveEvent && moveEvent->isFromXML();
@@ -135,9 +131,9 @@ bool MoveEvents::registerLuaPositionEvent(const std::shared_ptr<MoveEvent> moveE
 bool MoveEvents::registerLuaEvent(const std::shared_ptr<MoveEvent> moveEvent) {
 	// Check if event is correct
 	if (registerLuaItemEvent(moveEvent)
-		|| registerLuaUniqueEvent(moveEvent)
-		|| registerLuaActionEvent(moveEvent)
-		|| registerLuaPositionEvent(moveEvent)) {
+	    || registerLuaUniqueEvent(moveEvent)
+	    || registerLuaActionEvent(moveEvent)
+	    || registerLuaPositionEvent(moveEvent)) {
 		return true;
 	} else {
 		g_logger().warn(
@@ -294,7 +290,7 @@ bool MoveEvents::registerEvent(const std::shared_ptr<MoveEvent> moveEvent, const
 
 std::shared_ptr<MoveEvent> MoveEvents::getEvent(const std::shared_ptr<Tile> &tile, MoveEvent_t eventType) {
 	if (auto it = positionsMap.find(tile->getPosition());
-		it != positionsMap.end()) {
+	    it != positionsMap.end()) {
 		std::list<std::shared_ptr<MoveEvent>> &moveEventList = it->second.moveEvent[eventType];
 		if (!moveEventList.empty()) {
 			return *moveEventList.begin();
@@ -530,6 +526,7 @@ uint32_t MoveEvent::EquipItem(const std::shared_ptr<MoveEvent> moveEvent, std::s
 	}
 
 	if (player->isItemAbilityEnabled(slot)) {
+		g_logger().debug("[{}] item ability is already enabled", __FUNCTION__);
 		return 1;
 	}
 
@@ -728,12 +725,12 @@ bool MoveEvent::executeStep(const std::shared_ptr<Creature> &creature, std::shar
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		if (item != nullptr) {
 			g_logger().error("[MoveEvent::executeStep - Creature {} item {}, position {}] "
-							 "Call stack overflow. Too many lua script calls being nested.",
-							 creature->getName(), item->getName(), pos.toString());
+			                 "Call stack overflow. Too many lua script calls being nested.",
+			                 creature->getName(), item->getName(), pos.toString());
 		} else {
 			g_logger().error("[MoveEvent::executeStep - Creature {}, position {}] "
-							 "Call stack overflow. Too many lua script calls being nested.",
-							 creature->getName(), pos.toString());
+			                 "Call stack overflow. Too many lua script calls being nested.",
+			                 creature->getName(), pos.toString());
 		}
 		return false;
 	}
@@ -771,8 +768,8 @@ bool MoveEvent::executeEquip(const std::shared_ptr<Player> &player, const std::s
 	// onDeEquip(player, item, slot, isCheck)
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		g_logger().error("[MoveEvent::executeEquip - Player {} item {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 player->getName(), item->getName());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 player->getName(), item->getName());
 		return false;
 	}
 
@@ -804,9 +801,9 @@ bool MoveEvent::executeAddRemItem(const std::shared_ptr<Item> &item, const std::
 	// onRemoveItem(moveitem, tileitem, pos)
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		g_logger().error("[MoveEvent::executeAddRemItem - "
-						 "Item {} item on tile x: {} y: {} z: {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 item->getName(), pos.getX(), pos.getY(), pos.getZ());
+		                 "Item {} item on tile x: {} y: {} z: {}] "
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 item->getName(), pos.getX(), pos.getY(), pos.getZ());
 		return false;
 	}
 
@@ -836,9 +833,9 @@ bool MoveEvent::executeAddRemItem(const std::shared_ptr<Item> &item, const Posit
 	// onRemoveItem(moveitem, pos)
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		g_logger().error("[MoveEvent::executeAddRemItem - "
-						 "Item {} item on tile x: {} y: {} z: {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 item->getName(), pos.getX(), pos.getY(), pos.getZ());
+		                 "Item {} item on tile x: {} y: {} z: {}] "
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 item->getName(), pos.getX(), pos.getY(), pos.getZ());
 		return false;
 	}
 

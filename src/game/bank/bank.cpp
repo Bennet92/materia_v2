@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "bank.hpp"
 #include "game/game.hpp"
 #include "creatures/players/player.hpp"
@@ -80,33 +78,47 @@ const std::set<std::string> deniedNames = {
 	"paladinsample"
 };
 
-const uint32_t minTownId = 3;
-
-bool Bank::transferTo(const std::shared_ptr<Bank> destination, uint64_t amount) {
+bool Bank::transferTo(const std::shared_ptr<Bank> &destination, const uint64_t amount) {
 	if (!destination) {
 		g_logger().error("Bank::transferTo: destination is nullptr");
 		return false;
 	}
-	auto bankable = getBankable();
+
+	const auto bankable = getBankable();
 	if (!bankable) {
 		g_logger().error("Bank::transferTo: bankable is nullptr");
 		return false;
 	}
-	auto destinationBankable = destination->getBankable();
+
+	const auto destinationBankable = destination->getBankable();
 	if (!destinationBankable) {
 		g_logger().error("Bank::transferTo: destinationBankable is nullptr");
 		return false;
 	}
-	if (destinationBankable->getPlayer() != nullptr) {
-		auto player = destinationBankable->getPlayer();
-		auto name = asLowerCaseString(player->getName());
+
+	const auto &destinationPlayer = destinationBankable->getPlayer();
+	const auto &bankablePlayer = bankable->getPlayer();
+
+	if (destinationPlayer && bankablePlayer) {
+		auto name = asLowerCaseString(destinationPlayer->getName());
 		replaceString(name, " ", "");
+
 		if (deniedNames.contains(name)) {
 			g_logger().warn("Bank::transferTo: denied name: {}", name);
 			return false;
 		}
-		if (player->getTown()->getID() < minTownId) {
-			g_logger().warn("Bank::transferTo: denied town: {}", player->getTown()->getID());
+
+		const auto destinationTownId = destinationPlayer->getTown()->getID();
+		const auto bankableTownId = bankablePlayer->getTown()->getID();
+		const auto minTownIdToTransferFromMain = g_configManager().getNumber(MIN_TOWN_ID_TO_BANK_TRANSFER_FROM_MAIN);
+
+		if (destinationTownId < minTownIdToTransferFromMain && bankableTownId >= minTownIdToTransferFromMain) {
+			g_logger().warn("[{}] Player {} is from main town, trying to transfer money to player {} in {} town.", __FUNCTION__, bankablePlayer->getName(), destinationPlayer->getName(), destinationTownId);
+			return false;
+		}
+
+		if (bankableTownId < minTownIdToTransferFromMain && destinationTownId >= minTownIdToTransferFromMain) {
+			g_logger().warn("[{}] Player {} is not from main town, trying to transfer money to player {} in {} town.", __FUNCTION__, bankablePlayer->getName(), destinationPlayer->getName(), destinationTownId);
 			return false;
 		}
 	}
@@ -114,12 +126,23 @@ bool Bank::transferTo(const std::shared_ptr<Bank> destination, uint64_t amount) 
 	if (!(debit(amount) && destination->credit(amount))) {
 		return false;
 	}
-	g_metrics().addCounter("balance_increase", amount, { { "player", destination->getBankable()->getPlayer()->getName() }, { "context", "bank_transfer" } });
-	g_metrics().addCounter("balance_decrease", amount, { { "player", getBankable()->getPlayer()->getName() }, { "context", "bank_transfer" } });
+
+	if (destinationPlayer) {
+		g_metrics().addCounter("balance_increase", amount, { { "player", destinationPlayer->getName() }, { "context", "bank_transfer" } });
+	}
+
+	if (bankablePlayer) {
+		g_metrics().addCounter("balance_decrease", amount, { { "player", bankablePlayer->getName() }, { "context", "bank_transfer" } });
+	}
+
 	return true;
 }
 
 bool Bank::withdraw(std::shared_ptr<Player> player, uint64_t amount) {
+	if (!player) {
+		return false;
+	}
+
 	if (!debit(amount)) {
 		return false;
 	}
@@ -151,6 +174,8 @@ bool Bank::deposit(const std::shared_ptr<Bank> destination, uint64_t amount) {
 	if (!g_game().removeMoney(bankable->getPlayer(), amount)) {
 		return false;
 	}
-	g_metrics().addCounter("balance_increase", amount, { { "player", bankable->getPlayer()->getName() }, { "context", "bank_deposit" } });
+	if (bankable->getPlayer() != nullptr) {
+		g_metrics().addCounter("balance_decrease", amount, { { "player", bankable->getPlayer()->getName() }, { "context", "bank_deposit" } });
+	}
 	return destination->credit(amount);
 }

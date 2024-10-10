@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "lua/functions/items/item_functions.hpp"
 
 #include "game/game.hpp"
@@ -36,6 +34,25 @@ int ItemFunctions::luaItemCreate(lua_State* L) {
 int ItemFunctions::luaItemIsItem(lua_State* L) {
 	// item:isItem()
 	pushBoolean(L, getUserdataShared<const Item>(L, 1) != nullptr);
+	return 1;
+}
+
+int ItemFunctions::luaItemGetContainer(lua_State* L) {
+	// item:getContainer()
+	const auto &item = getUserdataShared<Item>(L, 1);
+	if (!item) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const auto &container = item->getContainer();
+	if (!container) {
+		g_logger().trace("Item {} is not a container", item->getName());
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	pushUserdata(L, container);
 	return 1;
 }
 
@@ -398,7 +415,7 @@ int ItemFunctions::luaItemSetAttribute(lua_State* L) {
 		switch (attribute) {
 			case ItemAttribute_t::DECAYSTATE: {
 				if (ItemDecayState_t decayState = getNumber<ItemDecayState_t>(L, 3);
-					decayState == DECAYING_FALSE || decayState == DECAYING_STOPPING) {
+				    decayState == DECAYING_FALSE || decayState == DECAYING_STOPPING) {
 					g_decay().stopDecay(item);
 				} else {
 					g_decay().startDecay(item);

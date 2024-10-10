@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "lua/functions/items/weapon_functions.hpp"
 
 #include "game/game.hpp"
@@ -77,8 +75,8 @@ int WeaponFunctions::luaWeaponAction(lua_State* L) {
 			weapon->action = WEAPONACTION_MOVE;
 		} else {
 			g_logger().error("[WeaponFunctions::luaWeaponAction] - "
-							 "No valid action {}",
-							 typeName);
+			                 "No valid action {}",
+			                 typeName);
 			pushBoolean(L, false);
 		}
 		pushBoolean(L, true);
@@ -285,8 +283,8 @@ int WeaponFunctions::luaWeaponElement(lua_State* L) {
 				weapon->params.combatType = COMBAT_HOLYDAMAGE;
 			} else {
 				g_logger().warn("[WeaponFunctions:luaWeaponElement] - "
-								"Type {} does not exist",
-								element);
+				                "Type {} does not exist",
+				                element);
 			}
 		} else {
 			weapon->params.combatType = getNumber<CombatType_t>(L, 2);
@@ -539,8 +537,8 @@ int WeaponFunctions::luaWeaponAmmoType(lua_State* L) {
 			it.ammoType = AMMO_BOLT;
 		} else {
 			g_logger().warn("[WeaponFunctions:luaWeaponAmmoType] - "
-							"Type {} does not exist",
-							type);
+			                "Type {} does not exist",
+			                type);
 			lua_pushnil(L);
 			return 1;
 		}
@@ -604,8 +602,8 @@ int WeaponFunctions::luaWeaponExtraElement(lua_State* L) {
 				it.abilities->elementType = COMBAT_HOLYDAMAGE;
 			} else {
 				g_logger().warn("[WeaponFunctions:luaWeaponExtraElement] - "
-								"Type {} does not exist",
-								element);
+				                "Type {} does not exist",
+				                element);
 			}
 		} else {
 			it.abilities->elementType = getNumber<CombatType_t>(L, 3);

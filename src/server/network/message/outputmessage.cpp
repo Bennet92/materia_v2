@@ -7,17 +7,22 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "outputmessage.hpp"
+
+#include "lib/di/container.hpp"
 #include "server/network/protocol/protocol.hpp"
 #include "game/scheduling/dispatcher.hpp"
 
 const std::chrono::milliseconds OUTPUTMESSAGE_AUTOSEND_DELAY { 10 };
 
+OutputMessagePool &OutputMessagePool::getInstance() {
+	return inject<OutputMessagePool>();
+}
+
 void OutputMessagePool::scheduleSendAll() {
-	auto function = std::bind_front(&OutputMessagePool::sendAll, this);
-	g_dispatcher().scheduleEvent(OUTPUTMESSAGE_AUTOSEND_DELAY.count(), function, "OutputMessagePool::sendAll");
+	g_dispatcher().scheduleEvent(
+		OUTPUTMESSAGE_AUTOSEND_DELAY.count(), [this] { sendAll(); }, "OutputMessagePool::sendAll"
+	);
 }
 
 void OutputMessagePool::sendAll() {

@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "lua/creature/actions.hpp"
 #include "items/bed.hpp"
 #include "items/containers/container.hpp"
@@ -203,7 +201,7 @@ ReturnValue Actions::canUseFar(std::shared_ptr<Creature> creature, const Positio
 		return RETURNVALUE_TOOFARAWAY;
 	}
 
-	if (checkLineOfSight && !g_game().canThrowObjectTo(creaturePos, toPos)) {
+	if (checkLineOfSight && !g_game().canThrowObjectTo(creaturePos, toPos, checkFloor ? SightLine_CheckSightLineAndFloor : SightLine_CheckSightLine)) {
 		return RETURNVALUE_CANNOTTHROW;
 	}
 
@@ -231,11 +229,11 @@ std::shared_ptr<Action> Actions::getAction(std::shared_ptr<Item> item) {
 	}
 
 	if (auto iteratePositions = actionPositionMap.find(item->getPosition());
-		iteratePositions != actionPositionMap.end()) {
+	    iteratePositions != actionPositionMap.end()) {
 		if (std::shared_ptr<Tile> tile = item->getTile();
-			tile) {
+		    tile) {
 			if (std::shared_ptr<Player> player = item->getHoldingPlayer();
-				player && item->getTopParent() == player) {
+			    player && item->getTopParent() == player) {
 				g_logger().debug("[Actions::getAction] - The position only is valid for use item in the map, player name {}", player->getName());
 				return nullptr;
 			}
@@ -408,14 +406,14 @@ bool Actions::useItem(std::shared_ptr<Player> player, const Position &pos, uint8
 	}
 
 	if (it.isRune() || it.type == ITEM_TYPE_POTION) {
-		player->setNextPotionAction(OTSYS_TIME() + g_configManager().getNumber(ACTIONS_DELAY_INTERVAL, __FUNCTION__));
+		player->setNextPotionAction(OTSYS_TIME() + g_configManager().getNumber(ACTIONS_DELAY_INTERVAL));
 	} else {
-		player->setNextAction(OTSYS_TIME() + g_configManager().getNumber(ACTIONS_DELAY_INTERVAL, __FUNCTION__));
+		player->setNextAction(OTSYS_TIME() + g_configManager().getNumber(ACTIONS_DELAY_INTERVAL));
 	}
 
 	// only send cooldown icon if it's an multi use item
 	if (it.isMultiUse()) {
-		player->sendUseItemCooldown(g_configManager().getNumber(ACTIONS_DELAY_INTERVAL, __FUNCTION__));
+		player->sendUseItemCooldown(g_configManager().getNumber(ACTIONS_DELAY_INTERVAL));
 	}
 	return true;
 }
@@ -461,13 +459,13 @@ bool Actions::useItemEx(std::shared_ptr<Player> player, const Position &fromPos,
 	}
 
 	if (it.isRune() || it.type == ITEM_TYPE_POTION) {
-		player->setNextPotionAction(OTSYS_TIME() + g_configManager().getNumber(EX_ACTIONS_DELAY_INTERVAL, __FUNCTION__));
+		player->setNextPotionAction(OTSYS_TIME() + g_configManager().getNumber(EX_ACTIONS_DELAY_INTERVAL));
 	} else {
-		player->setNextAction(OTSYS_TIME() + g_configManager().getNumber(EX_ACTIONS_DELAY_INTERVAL, __FUNCTION__));
+		player->setNextAction(OTSYS_TIME() + g_configManager().getNumber(EX_ACTIONS_DELAY_INTERVAL));
 	}
 
 	if (it.isMultiUse()) {
-		player->sendUseItemCooldown(g_configManager().getNumber(EX_ACTIONS_DELAY_INTERVAL, __FUNCTION__));
+		player->sendUseItemCooldown(g_configManager().getNumber(EX_ACTIONS_DELAY_INTERVAL));
 	}
 	return true;
 }
@@ -515,8 +513,8 @@ bool Action::executeUse(std::shared_ptr<Player> player, std::shared_ptr<Item> it
 	// onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	if (!getScriptInterface()->reserveScriptEnv()) {
 		g_logger().error("[Action::executeUse - Player {}, on item {}] "
-						 "Call stack overflow. Too many lua script calls being nested.",
-						 player->getName(), item->getName());
+		                 "Call stack overflow. Too many lua script calls being nested.",
+		                 player->getName(), item->getName());
 		return false;
 	}
 
