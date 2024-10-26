@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "io/io_bosstiary.hpp"
 
 #include "creatures/monsters/monsters.hpp"
@@ -137,7 +135,7 @@ const std::map<uint16_t, std::string> &IOBosstiary::getBosstiaryMap() const {
 	return bosstiaryMap;
 }
 
-void IOBosstiary::setBossBoostedName(const std::string_view &name) {
+void IOBosstiary::setBossBoostedName(std::string_view name) {
 	boostedBoss = name;
 }
 
@@ -249,6 +247,7 @@ std::vector<uint16_t> IOBosstiary::getBosstiaryFinished(const std::shared_ptr<Pl
 
 		const auto mType = g_monsters().getMonsterType(bossName);
 		if (!mType) {
+			g_logger().error("[{}] Boss with id {} and name {} not found in boss map", __FUNCTION__, bossId, bossName);
 			continue;
 		}
 

@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/players/player.hpp"
 #include "lua/scripts/scripts.hpp"
 #include "lua/creature/talkaction.hpp"
@@ -25,7 +23,7 @@ bool TalkActions::registerLuaEvent(const TalkAction_ptr &talkAction) {
 	return inserted;
 }
 
-bool TalkActions::checkWord(std::shared_ptr<Player> player, SpeakClasses type, const std::string &words, const std::string_view &word, const TalkAction_ptr &talkActionPtr) const {
+bool TalkActions::checkWord(std::shared_ptr<Player> player, SpeakClasses type, const std::string &words, std::string_view word, const TalkAction_ptr &talkActionPtr) const {
 	auto spacePos = std::ranges::find_if(words.begin(), words.end(), ::isspace);
 	std::string firstWord = words.substr(0, spacePos - words.begin());
 

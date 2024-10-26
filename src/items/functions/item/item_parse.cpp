@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "items/functions/item/item_parse.hpp"
 #include "items/weapons/weapons.hpp"
 #include "lua/creature/movement.hpp"
@@ -127,8 +125,8 @@ void ItemParse::parseDescription(const std::string &tmpStrValue, pugi::xml_attri
 	std::string stringValue = tmpStrValue;
 	if (stringValue == "description") {
 		itemType.description = valueAttribute.as_string();
-		if (g_configManager().getBoolean(TOGGLE_GOLD_POUCH_QUICKLOOT_ONLY, __FUNCTION__) && itemType.id == ITEM_GOLD_POUCH) {
-			auto pouchLimit = g_configManager().getNumber(LOOTPOUCH_MAXLIMIT, __FUNCTION__);
+		if (g_configManager().getBoolean(TOGGLE_GOLD_POUCH_QUICKLOOT_ONLY) && itemType.id == ITEM_GOLD_POUCH) {
+			auto pouchLimit = g_configManager().getNumber(LOOTPOUCH_MAXLIMIT);
 			itemType.description = fmt::format("A bag with {} slots where you can hold your loots.", pouchLimit);
 			itemType.name = "loot pouch";
 		}
@@ -899,7 +897,7 @@ void ItemParse::parseAugment(const std::string &tmpStrValue, pugi::xml_node attr
 				if (hasValueDescrition) {
 					const auto it = AugmentWithoutValueDescriptionDefaultKeys.find(augmentType);
 					if (it != AugmentWithoutValueDescriptionDefaultKeys.end()) {
-						augmentValue = g_configManager().getNumber(it->second, __FUNCTION__);
+						augmentValue = g_configManager().getNumber(it->second);
 					}
 				}
 
@@ -1006,19 +1004,19 @@ void ItemParse::parseReflectDamage(const std::string &tmpStrValue, pugi::xml_att
 	}
 }
 
-void ItemParse::parseTransformOnUse(const std::string_view &tmpStrValue, pugi::xml_attribute valueAttribute, ItemType &itemType) {
+void ItemParse::parseTransformOnUse(std::string_view tmpStrValue, pugi::xml_attribute valueAttribute, ItemType &itemType) {
 	if (tmpStrValue == "transformonuse") {
 		itemType.m_transformOnUse = pugi::cast<uint16_t>(valueAttribute.value());
 	}
 }
 
-void ItemParse::parsePrimaryType(const std::string_view &tmpStrValue, pugi::xml_attribute valueAttribute, ItemType &itemType) {
+void ItemParse::parsePrimaryType(std::string_view tmpStrValue, pugi::xml_attribute valueAttribute, ItemType &itemType) {
 	if (tmpStrValue == "primarytype") {
 		itemType.m_primaryType = asLowerCaseString(valueAttribute.as_string());
 	}
 }
 
-void ItemParse::parseHouseRelated(const std::string_view &tmpStrValue, pugi::xml_attribute valueAttribute, ItemType &itemType) {
+void ItemParse::parseHouseRelated(std::string_view tmpStrValue, pugi::xml_attribute valueAttribute, ItemType &itemType) {
 	if (tmpStrValue == "usedbyhouseguests") {
 		g_logger().debug("[{}] item {}, used by guests {}", __FUNCTION__, itemType.id, valueAttribute.as_bool());
 		itemType.m_canBeUsedByGuests = valueAttribute.as_bool();
@@ -1262,7 +1260,7 @@ void ItemParse::createAndRegisterScript(ItemType &itemType, pugi::xml_node attri
 	}
 }
 
-void ItemParse::parseUnscriptedItems(const std::string_view &tmpStrValue, pugi::xml_node attributeNode, pugi::xml_attribute valueAttribute, ItemType &itemType) {
+void ItemParse::parseUnscriptedItems(std::string_view tmpStrValue, pugi::xml_node attributeNode, pugi::xml_attribute valueAttribute, ItemType &itemType) {
 	if (tmpStrValue == "script") {
 		std::string scriptName = valueAttribute.as_string();
 		auto tokens = split(scriptName.data(), ';');

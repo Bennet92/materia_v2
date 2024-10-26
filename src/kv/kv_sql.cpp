@@ -7,13 +7,16 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "kv/kv_sql.hpp"
+
+#include "database/database.hpp"
 #include "kv/value_wrapper_proto.hpp"
 #include "utils/tools.hpp"
 
 #include <kv.pb.h>
+
+KVSQL::KVSQL(Database &db, Logger &logger) :
+	KVStore(logger), db(db) { }
 
 std::optional<ValueWrapper> KVSQL::load(const std::string &key) {
 	auto query = fmt::format("SELECT `key_name`, `timestamp`, `value` FROM `kv_store` WHERE `key_name` = {}", db.escapeString(key));
@@ -96,4 +99,10 @@ bool KVSQL::saveAll() {
 	}
 
 	return success;
+}
+
+DBInsert KVSQL::dbUpdate() {
+	auto insert = DBInsert("INSERT INTO `kv_store` (`key_name`, `timestamp`, `value`) VALUES");
+	insert.upsert({ "key_name", "timestamp", "value" });
+	return insert;
 }

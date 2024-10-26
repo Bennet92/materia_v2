@@ -7,8 +7,6 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "pch.hpp"
-
 #include "creatures/combat/condition.hpp"
 #include "game/game.hpp"
 #include "game/scheduling/dispatcher.hpp"
@@ -257,6 +255,8 @@ std::shared_ptr<Condition> Condition::createCondition(ConditionId_t id, Conditio
 			return std::make_shared<ConditionGeneric>(id, type, ticks, buff, subId);
 		case CONDITION_BAKRAGORE:
 			return std::make_shared<ConditionGeneric>(id, type, ticks, buff, subId, isPersistent);
+		case CONDITION_GOSHNARTAINT:
+			return std::make_shared<ConditionGeneric>(id, type, ticks, buff, subId);
 
 		default:
 			return nullptr;
@@ -345,7 +345,14 @@ bool Condition::isRemovableOnDeath() const {
 		return false;
 	}
 
-	if (conditionType == CONDITION_SPELLCOOLDOWN || conditionType == CONDITION_SPELLGROUPCOOLDOWN || conditionType == CONDITION_MUTED) {
+	static const std::unordered_set<ConditionType_t> nonRemovableConditions = {
+		CONDITION_SPELLCOOLDOWN,
+		CONDITION_SPELLGROUPCOOLDOWN,
+		CONDITION_MUTED,
+		CONDITION_GOSHNARTAINT
+	};
+
+	if (nonRemovableConditions.find(conditionType) != nonRemovableConditions.end()) {
 		return false;
 	}
 
@@ -418,7 +425,26 @@ std::unordered_set<PlayerIcon> ConditionGeneric::getIcons() const {
 		case CONDITION_ROOTED:
 			icons.insert(PlayerIcon::Rooted);
 			break;
-
+		case CONDITION_GOSHNARTAINT:
+			switch (subId) {
+				case 1:
+					icons.insert(PlayerIcon::GoshnarTaint1);
+					break;
+				case 2:
+					icons.insert(PlayerIcon::GoshnarTaint2);
+					break;
+				case 3:
+					icons.insert(PlayerIcon::GoshnarTaint3);
+					break;
+				case 4:
+					icons.insert(PlayerIcon::GoshnarTaint4);
+					break;
+				case 5:
+					icons.insert(PlayerIcon::GoshnarTaint5);
+					break;
+				default:
+					break;
+			}
 		default:
 			break;
 	}
@@ -443,14 +469,13 @@ void ConditionAttributes::addCondition(std::shared_ptr<Creature> creature, const
 		endCondition(creature);
 
 		// Apply the new one
-		memcpy(skills, conditionAttrs->skills, sizeof(skills));
-		memcpy(skillsPercent, conditionAttrs->skillsPercent, sizeof(skillsPercent));
-		memcpy(stats, conditionAttrs->stats, sizeof(stats));
-		memcpy(statsPercent, conditionAttrs->statsPercent, sizeof(statsPercent));
-		memcpy(buffs, conditionAttrs->buffs, sizeof(buffs));
-		memcpy(buffsPercent, conditionAttrs->buffsPercent, sizeof(buffsPercent));
+		std::ranges::copy(std::span(conditionAttrs->skills), skills);
+		std::ranges::copy(std::span(conditionAttrs->skillsPercent), skillsPercent);
+		std::ranges::copy(std::span(conditionAttrs->stats), stats);
+		std::ranges::copy(std::span(conditionAttrs->statsPercent), statsPercent);
+		std::ranges::copy(std::span(conditionAttrs->buffs), buffs);
+		std::ranges::copy(std::span(conditionAttrs->buffsPercent), buffsPercent);
 
-		// Using std::array can only increment to the new instead of use memcpy
 		absorbs = conditionAttrs->absorbs;
 		absorbsPercent = conditionAttrs->absorbsPercent;
 		increases = conditionAttrs->increases;
@@ -1276,7 +1301,7 @@ uint32_t ConditionRegeneration::getHealthTicks(std::shared_ptr<Creature> creatur
 	std::shared_ptr<Player> player = creature->getPlayer();
 
 	if (player != nullptr && isBuff) {
-		return healthTicks / g_configManager().getFloat(RATE_SPELL_COOLDOWN, __FUNCTION__);
+		return healthTicks / g_configManager().getFloat(RATE_SPELL_COOLDOWN);
 	}
 
 	return healthTicks;
@@ -1286,7 +1311,7 @@ uint32_t ConditionRegeneration::getManaTicks(std::shared_ptr<Creature> creature)
 	std::shared_ptr<Player> player = creature->getPlayer();
 
 	if (player != nullptr && isBuff) {
-		return manaTicks / g_configManager().getFloat(RATE_SPELL_COOLDOWN, __FUNCTION__);
+		return manaTicks / g_configManager().getFloat(RATE_SPELL_COOLDOWN);
 	}
 
 	return manaTicks;
@@ -2067,10 +2092,12 @@ bool ConditionFeared::executeCondition(std::shared_ptr<Creature> creature, int32
 		}
 
 		if (getFleePath(creature, currentPos, listDir)) {
-			g_dispatcher().addEvent([id = creature->getID(), listDir] {
-				g_game().forcePlayerAutoWalk(id, listDir);
-			},
-			                        "ConditionFeared::executeCondition");
+			g_dispatcher().addEvent(
+				[id = creature->getID(), listDir] {
+					g_game().forcePlayerAutoWalk(id, listDir);
+				},
+				__FUNCTION__
+			);
 
 			g_logger().debug("[ConditionFeared::executeCondition] Walking Scheduled");
 		}
@@ -2298,7 +2325,7 @@ void ConditionOutfit::serialize(PropWriteStream &propWriteStream) {
 }
 
 bool ConditionOutfit::startCondition(std::shared_ptr<Creature> creature) {
-	if (g_configManager().getBoolean(WARN_UNSAFE_SCRIPTS, __FUNCTION__) && outfit.lookType != 0 && !g_game().isLookTypeRegistered(outfit.lookType)) {
+	if (g_configManager().getBoolean(WARN_UNSAFE_SCRIPTS) && outfit.lookType != 0 && !g_game().isLookTypeRegistered(outfit.lookType)) {
 		g_logger().warn("[ConditionOutfit::startCondition] An unregistered creature looktype type with id '{}' was blocked to prevent client crash.", outfit.lookType);
 		return false;
 	}
@@ -2330,7 +2357,7 @@ void ConditionOutfit::endCondition(std::shared_ptr<Creature> creature) {
 }
 
 void ConditionOutfit::addCondition(std::shared_ptr<Creature> creature, const std::shared_ptr<Condition> addCondition) {
-	if (g_configManager().getBoolean(WARN_UNSAFE_SCRIPTS, __FUNCTION__) && outfit.lookType != 0 && !g_game().isLookTypeRegistered(outfit.lookType)) {
+	if (g_configManager().getBoolean(WARN_UNSAFE_SCRIPTS) && outfit.lookType != 0 && !g_game().isLookTypeRegistered(outfit.lookType)) {
 		g_logger().warn("[ConditionOutfit::addCondition] An unregistered creature looktype type with id '{}' was blocked to prevent client crash.", outfit.lookType);
 		return;
 	}
