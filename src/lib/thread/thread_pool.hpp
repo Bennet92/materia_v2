@@ -6,6 +6,7 @@
  * Contributors: https://github.com/opentibiabr/canary/graphs/contributors
  * Website: https://docs.opentibiabr.com/
  */
+
 #pragma once
 
 #include "BS_thread_pool.hpp"
@@ -16,9 +17,9 @@ public:
 
 	// Ensures that we don't accidentally copy it
 	ThreadPool(const ThreadPool &) = delete;
-	ThreadPool operator=(const ThreadPool &) = delete;
+	ThreadPool &operator=(const ThreadPool &) = delete;
 
-	void start();
+	void start() const;
 	void shutdown();
 
 	static int16_t getThreadId() {
@@ -31,13 +32,16 @@ public:
 		}
 
 		return id;
-	};
+	}
 
 	bool isStopped() const {
 		return stopped;
 	}
 
 private:
+	std::mutex mutex;
+	std::condition_variable condition;
+
 	Logger &logger;
 	bool stopped = false;
 };
